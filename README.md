@@ -1,5 +1,7 @@
 # Divisive hierarchical clustering of network partitions
 
+Finds clusters of partitions such that the maximum distance, measured by the complement of the weighted Jaccard similarity, does not exceed a user specified threshold.
+
 ## Author:
 
 Martin Rosvall
@@ -40,15 +42,15 @@ input_partitions.txt
 3 3 3 3 3 5 5 5 5 5  
 
 output_clustering.txt   
-# Clustered 10 partitions into 2 clusters with maximum distance 0.466666666666667, average maximum distance 0.344444444444444,  and maximum cluster size 5 
-# ClusterId PartitionId 
-# Cluster 1: 5 nodes with max distance 0.466666666666667 
+\# Clustered 10 partitions into 2 clusters with maximum distance 0.466666666666667, average maximum distance 0.344444444444444,  and maximum cluster size 5 
+\# ClusterId PartitionId 
+\# Cluster 1: 5 nodes with max distance 0.466666666666667 
 1 1 
 1 2 
 1 3 
 1 4 
 1 5 
-# Cluster 2: 5 nodes with max distance 0.222222222222222 
+\# Cluster 2: 5 nodes with max distance 0.222222222222222 
 2 6 
 2 7 
 2 8 

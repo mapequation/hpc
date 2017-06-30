@@ -221,32 +221,36 @@ double Partitions::wpJaccardDist(Partition *partition1, Partition *partition2){
 
 double Partitions::calcMaxDist(vector<Partition *> &partitionPtrs){
 
-	double maxDist = 0.0;
 	int NClusterPartitions = partitionPtrs.size();
+	double maxDist = 0.0;
 	
-	int randPartitionId = randInt(0,NClusterPartitions-1);
-	int maxDistIdWithRandPartitionId = randPartitionId;
-	double maxDistWithRandPartitionId = 0.0;
-	
-	int Nsteps = 2;
-	int step = 0;
-	while(step < Nsteps){
-		randPartitionId = maxDistIdWithRandPartitionId;
-		maxDistIdWithRandPartitionId = randPartitionId;
-		maxDistWithRandPartitionId = 0.0;
-		for(int i=0;i<NClusterPartitions;i++){
-			if(i != randPartitionId){
-				double dist = wpJaccardDist(partitionPtrs[randPartitionId],partitionPtrs[i]);
-				if(dist > maxDistWithRandPartitionId){									
-					maxDistWithRandPartitionId = dist; // Min in round
-					maxDistIdWithRandPartitionId = i;
-					maxDist = max(maxDist,dist); // Min overall
+	for(int attempts=0;attempts < 10; attempts++){
+		
+		int randPartitionId = randInt(0,NClusterPartitions-1);
+		int maxDistIdWithRandPartitionId = randPartitionId;
+		double maxDistWithRandPartitionId = 0.0;
+		
+		int Nsteps = 2;
+		int step = 0;
+		while(step < Nsteps){
+			randPartitionId = maxDistIdWithRandPartitionId;
+			maxDistIdWithRandPartitionId = randPartitionId;
+			maxDistWithRandPartitionId = 0.0;
+			for(int i=0;i<NClusterPartitions;i++){
+				if(i != randPartitionId){
+					double dist = wpJaccardDist(partitionPtrs[randPartitionId],partitionPtrs[i]);
+					if(dist > maxDistWithRandPartitionId){									
+						maxDistWithRandPartitionId = dist; // Max in round
+						maxDistIdWithRandPartitionId = i;
+						maxDist = max(maxDist,dist); // Max overall
+					}
 				}
 			}
+			step++;
 		}
-		step++;
-	}
 
+	}
+	
 	return maxDist;
 }
 
