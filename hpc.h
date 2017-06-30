@@ -119,6 +119,7 @@ private:
 	string inFileName;
 	string outFileName;
 	int Nattempts = 1;
+	int NdistAttempts = 1;
 	double distThreshold = 0.1;
 	vector<mt19937> mtRands;
 	ifstream ifs;
@@ -130,19 +131,20 @@ private:
 	// unordered_map<pair<int,int>,double,pairhash> cachedWJSdiv;
 
 public:
-	Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,unsigned int NfinalClu,unsigned int NsplitClu,int Nattempts,int seed); 
+	Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,unsigned int NfinalClu,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int seed); 
 	void readPartitionsFile();
 	void clusterPartitions();
 	void printClusters();
 
 };
 
-Partitions::Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,unsigned int NfinalClu,unsigned int NsplitClu,int Nattempts,int seed){
+Partitions::Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,unsigned int NfinalClu,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int seed){
 	this->Nskiplines = Nskiplines;
 	this->distThreshold = distThreshold;
 	this->NfinalClu = NfinalClu;
 	this->NsplitClu = NsplitClu;
 	this->Nattempts = Nattempts;
+	this->NdistAttempts = NdistAttempts;
 	this->inFileName = inFileName;
 	this->outFileName = outFileName;
 
@@ -224,7 +226,7 @@ double Partitions::calcMaxDist(vector<Partition *> &partitionPtrs){
 	int NClusterPartitions = partitionPtrs.size();
 	double maxDist = 0.0;
 	
-	for(int attempts=0;attempts < 10; attempts++){
+	for(int attempts=0;attempts < NdistAttempts; attempts++){
 		
 		int randPartitionId = randInt(0,NClusterPartitions-1);
 		int maxDistIdWithRandPartitionId = randPartitionId;

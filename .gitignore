@@ -4,3 +4,5 @@ bird_matrix_si_super_separated.txt
 hpc
 
 *.o
+
+output.txt

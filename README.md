@@ -16,9 +16,10 @@ just run 'make' in the current directory to compile the
 code with the included Makefile.
 
 
-Call: ./hpc [-s \<seed\>] [-N \<number of attempts\>] [-t <distance threshold>] [-k \<max number of clusters\>] [-d \<number of clusters in each division (>= 2)\>] input_partitions.txt output_clustering_txt  
+Call: ./hpc [-h] [-s \<seed\>] [-N \<number of attempts\>] [-n \<max distance iterations\>] [-t \<distance threshold\>] [-k \<max number of clusters\>] [-d \<number of clusters in each division (>= 2)\>] [--skiplines N] input_partitions.txt output_clustering_txt  
 seed: Any positive integer.  
 number of attempts: The number of clustering attempts. The best will be printed.  
+max distance attempts: The number of iterations to estimate the maximum distance in a cluster. Default is 1.
 max number of clusters: The max number of clusters after divisive clustering. Default is 100.  
 nunmber of attempts: The number of attempts to optimize the cluster assignments. Default is 1.  
 number of clusters in each division (>= 2): The number of clusters the cluster with highest divergence will be divided into. Default is 2.  

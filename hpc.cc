@@ -20,7 +20,7 @@ int main(int argc,char *argv[]){
   cout << endl;
 
   // Parse command input
-  const string CALL_SYNTAX = "Call: ./hpc [-s <seed>] [-N <number of attempts>] [-t <distance threshold>] [-k <number of clusters>] [-d <number of clusters in each division (>= 2)>] [--skiplines N] input_partitions.txt output_clustering_txt\n";
+  const string CALL_SYNTAX = "Call: ./hpc [-h] [-s <seed>] [-N <number of attempts>] [-n <max distance iterations>] [-t <distance threshold>] [-k <number of clusters>] [-d <number of clusters in each division (>= 2)>] [--skiplines N] input_partitions.txt output_clustering_txt\n";
   if( argc == 1 ){
     cout << CALL_SYNTAX;
     exit(-1);
@@ -36,11 +36,13 @@ int main(int argc,char *argv[]){
   unsigned int NsplitClu = 2;
   double distThreshold = 0.0;
   int Nattempts = 1;
+  int NdistAttempts = 1;
   while(argNr < argc){
     if(to_string(argv[argNr]) == "-h"){
       cout << CALL_SYNTAX;
       cout << "seed: Any positive integer." << endl;  
-      cout << "number of attempts: The number of clustering attempts. The best will be printed." << endl;  
+      cout << "number of attempts: The number of clustering attempts. The best will be printed." << endl; 
+      cout << "max distance attempts: The number of iterations to estimate the maximum distance in a cluster. Default is 1." << endl;  
       cout << "max number of clusters: The max number of clusters after divisive clustering. Default is 100." << endl;  
       cout << "nunmber of attempts: The number of attempts to optimize the cluster assignments. Default is 1." << endl;  
       cout << "number of clusters in each division (>= 2): The number of clusters the cluster with highest divergence will be divided into. Default is 2." << endl;
@@ -63,6 +65,11 @@ int main(int argc,char *argv[]){
     else if(to_string(argv[argNr]) == "-N"){
       argNr++;
       Nattempts = atoi(argv[argNr]);
+      argNr++;
+    }
+    else if(to_string(argv[argNr]) == "-n"){
+      argNr++;
+      NdistAttempts = atoi(argv[argNr]);
       argNr++;
     }
     else if(to_string(argv[argNr]) == "-k"){
@@ -119,12 +126,13 @@ int main(int argc,char *argv[]){
   cout << "-->[NOT IMPLEMENTED YET] Will let number of clusters reach: " << NfinalClu << endl;
   cout << "-->Will iteratively divide worst cluster into number of clusters: " << NsplitClu << endl;
   cout << "-->Will make number of attempts: " << Nattempts << endl;
+  cout << "-->Will estimate max distance in cluster with number of attempts: " << NdistAttempts << endl;
   cout << "-->Will read partitions from file: " << inFileName << endl;
   if(Nskiplines > 0)
     cout << "-->skipping " << Nskiplines << " lines";
   cout << "-->Will write clusters to file: " << outFileName << endl;
 
-  Partitions partitions(inFileName,outFileName,Nskiplines,distThreshold,NfinalClu,NsplitClu,Nattempts,seed);
+  Partitions partitions(inFileName,outFileName,Nskiplines,distThreshold,NfinalClu,NsplitClu,Nattempts,NdistAttempts,seed);
 
   partitions.clusterPartitions();
   partitions.printClusters();
