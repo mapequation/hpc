@@ -42,17 +42,17 @@ input_partitions.txt
 3 3 3 3 3 5 5 5 5 5  
 
 output_clustering.txt   
-\# Clustered 10 partitions into 2 clusters with maximum distance 0.466666666666667, average maximum distance 0.344444444444444,  and maximum cluster size 5 
-\# ClusterId PartitionId 
-\# Cluster 1: 5 nodes with max distance 0.466666666666667 
-1 1 
-1 2 
-1 3 
-1 4 
-1 5 
-\# Cluster 2: 5 nodes with max distance 0.222222222222222 
-2 6 
-2 7 
-2 8 
-2 9 
-2 10  
+\# Clustered 10 partitions into 2 clusters with maximum distance 0.466666666666667, average maximum distance  0.344444444444444,  and maximum cluster size 5  
+\# ClusterId PartitionId  
+\# Cluster 1: 5 nodes with max distance 0.466666666666667  
+1 1  
+1 2  
+1 3  
+1 4  
+1 5  
+\# Cluster 2: 5 nodes with max distance 0.222222222222222  
+2 6  
+2 7  
+2 8  
+2 9  
+2 10   
