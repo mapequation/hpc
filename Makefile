@@ -1,12 +1,12 @@
 # Various flags
 #CXX  = clang++
-CXX = g++-5
+CXX = g++-6
 LINK = $(CXX)
 #CXXFLAGS = -std=c++11 -Wall -g 
-#CXXFLAGS = -std=c++11 -Wall -O3
-CXXFLAGS = -std=c++11 -Wall -O3 -fopenmp
-#LFLAGS = -lm
-LFLAGS = -lm -fopenmp
+CXXFLAGS = -std=c++11 -Wall -O3
+#CXXFLAGS = -std=c++11 -Wall -O3 -fopenmp
+LFLAGS = -lm
+#LFLAGS = -lm -fopenmp
 # ifneq "$(findstring noomp, $(MAKECMDGOALS))" "noomp"
 # 	CXXFLAGS += -fopenmp
 # 	LFLAGS += -fopenmp

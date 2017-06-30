@@ -1,4 +1,4 @@
-#include "wjs-kmedoids++-lumping.h"
+#include "hpc.h"
 
 using namespace std;
 using std::cout;
@@ -12,7 +12,7 @@ unsigned stou(char *s){
   // Call: trade <seed> <Ntries>
 int main(int argc,char *argv[]){
 
-  cout << "Version: July 17, 2016." << endl;
+  cout << "Version: June 28, 2017." << endl;
   cout << "Command: ";
   cout << argv[0];
   for(int i=1;i<argc; i++)
@@ -20,25 +20,34 @@ int main(int argc,char *argv[]){
   cout << endl;
 
   // Parse command input
-  const string CALL_SYNTAX = "Call: ./dangling-lumping [-s <seed>] [-N <number of attempts>] [-k <number of clusters>] [-d <number of clusters in each division (>= 2)>] [--fast] [--batchoutput] input_state_network.net output_state_network.net\n";
+  const string CALL_SYNTAX = "Call: ./hpc [-s <seed>] [-N <number of attempts>] [-t <distance threshold>] [-k <number of clusters>] [-d <number of clusters in each division (>= 2)>] [--skiplines N] input_partitions.txt output_clustering_txt\n";
   if( argc == 1 ){
     cout << CALL_SYNTAX;
     exit(-1);
   }
   unsigned int seed = 1234;
 
-  string inFileName;
-  string outFileName;
+  string inFileName = "noname";
+  string outFileName = "noname";
+  int Nskiplines = 0;
 
   int argNr = 1;
   unsigned int NfinalClu = 100;
   unsigned int NsplitClu = 2;
+  double distThreshold = 0.0;
   int Nattempts = 1;
-  bool batchOutput = false;
-  bool fast = false;
   while(argNr < argc){
     if(to_string(argv[argNr]) == "-h"){
       cout << CALL_SYNTAX;
+      cout << "seed: Any positive integer." << endl;  
+      cout << "number of attempts: The number of clustering attempts. The best will be printed." << endl;  
+      cout << "max number of clusters: The max number of clusters after divisive clustering. Default is 100." << endl;  
+      cout << "nunmber of attempts: The number of attempts to optimize the cluster assignments. Default is 1." << endl;  
+      cout << "number of clusters in each division (>= 2): The number of clusters the cluster with highest divergence will be divided into. Default is 2." << endl;
+      cout << "--skiplines N: Skip N lines in input_partitions.txt before reading data  " << endl;  
+      cout << "input_partitions.txt: Each column corresponds to a partition and each row corresponds to a node id." << endl;  
+      cout << "output_clustering.txt: clusterID partitionID" << endl;  
+      cout << "-h: This help" << endl;
       exit(-1);
     }
     else if(to_string(argv[argNr]) == "-s"){
@@ -46,12 +55,9 @@ int main(int argc,char *argv[]){
       seed = atoi(argv[argNr]);
       argNr++;
     }
-    else if(to_string(argv[argNr]) == "--batchoutput"){
-      batchOutput = true;
+    else if(to_string(argv[argNr]) == "--skiplines"){
       argNr++;
-    }
-    else if(to_string(argv[argNr]) == "--fast"){
-      fast = true;
+      Nskiplines = atoi(argv[argNr]);
       argNr++;
     }
     else if(to_string(argv[argNr]) == "-N"){
@@ -62,6 +68,11 @@ int main(int argc,char *argv[]){
     else if(to_string(argv[argNr]) == "-k"){
       argNr++;
       NfinalClu = atoi(argv[argNr]);
+      argNr++;
+    }
+    else if(to_string(argv[argNr]) == "-t"){
+      argNr++;
+      distThreshold = atof(argv[argNr]);
       argNr++;
     }
     else if(to_string(argv[argNr]) == "-d"){
@@ -89,40 +100,33 @@ int main(int argc,char *argv[]){
     }
 
   }
+
+
+  if(inFileName == "noname"){
+    cout << "Missing infile" << endl;
+    cout << CALL_SYNTAX;
+    exit(-1);
+  }
+  if(outFileName == "noname"){
+    cout << "Missing outfile" << endl;
+    cout << CALL_SYNTAX;
+    exit(-1);
+  }
   
   cout << "Setup:" << endl;
   cout << "-->Using seed: " << seed << endl;
-  cout << "-->Will lump state nodes into number of clusters per physical node: " << NfinalClu << endl;
+  cout << "-->Will cluster partitions such that no cluster contains two partitions with distance larger than: " << distThreshold << endl;
+  cout << "-->[NOT IMPLEMENTED YET] Will let number of clusters reach: " << NfinalClu << endl;
   cout << "-->Will iteratively divide worst cluster into number of clusters: " << NsplitClu << endl;
   cout << "-->Will make number of attempts: " << Nattempts << endl;
-  if(fast)
-    cout << "-->Will use medoid center to approximate cluster entropy rate during assignment." << endl;
-  else
-    cout << "-->Will use aggregate cluster to calculate entropy rate during assignment." << endl;
-  // if(tune)
-  //   cout << "-->Will tune medoids for bestter accuracy." << endl;
-  // else
-  //   cout << "-->Will not tune medoids for better accuracy." << endl;
-  cout << "-->Will read state network from file: " << inFileName << endl;
-  cout << "-->Will write processed state network to file: " << outFileName << endl;
+  cout << "-->Will read partitions from file: " << inFileName << endl;
+  if(Nskiplines > 0)
+    cout << "-->skipping " << Nskiplines << " lines";
+  cout << "-->Will write clusters to file: " << outFileName << endl;
 
-  StateNetwork statenetwork(inFileName,outFileName,NfinalClu,NsplitClu,Nattempts,fast,batchOutput,seed);
+  Partitions partitions(inFileName,outFileName,Nskiplines,distThreshold,NfinalClu,NsplitClu,Nattempts,seed);
 
-  int NprocessedBatches = 0;
-  while(statenetwork.loadStateNetworkBatch()){ // NprocessedBatches < 5 &&
-    statenetwork.lumpStateNodes();
-    NprocessedBatches++;
-    if(statenetwork.keepReading || statenetwork.Nbatches > 1){
-      statenetwork.printStateNetworkBatch();
-      statenetwork.concludeBatch();
-    }
-    else{
-      statenetwork.printStateNetwork();
-      break;
-    }
-  }
-
-  if(statenetwork.Nbatches > 1)
-    statenetwork.compileBatches();
+  partitions.clusterPartitions();
+  partitions.printClusters();
 
 }
