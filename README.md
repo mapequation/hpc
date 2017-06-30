@@ -17,6 +17,7 @@ code with the included Makefile.
 
 
 Call: ./hpc [-h] [-s \<seed\>] [-N \<number of attempts\>] [-n \<max distance iterations\>] [-t \<distance threshold\>] [-k \<max number of clusters\>] [-d \<number of clusters in each division (>= 2)\>] [--skiplines N] input_partitions.txt output_clustering_txt  
+
 seed: Any positive integer.  
 number of attempts: The number of clustering attempts. The best will be printed.  
 max distance attempts: The number of iterations to estimate the maximum distance in a cluster. Default is 1.
