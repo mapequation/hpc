@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <limits>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -26,6 +27,7 @@ using namespace std;
 const double epsilon = 1.0e-15;
 const double bignum = 1.0;
 const double threshold = 1.0e-10;
+const unsigned int max_unsigned_int_size = std::numeric_limits<unsigned int>::max();
 
 // ofstream with higher precision to avoid truncation errors
 struct my_ofstream : ofstream {
@@ -34,6 +36,7 @@ struct my_ofstream : ofstream {
     this->precision(prec);
   }
 };
+
 
 template <class T>
 inline string to_string (const T& t){
@@ -50,6 +53,16 @@ public:
     return x.first*31 + x.second;
   }
 };
+
+unsigned int convert_div_to_uintdiv(double div)
+{ 
+  return static_cast<unsigned int>(max_unsigned_int_size*div);
+}
+
+double convert_uintdiv_to_div(unsigned int uintdiv)
+{ 
+  return static_cast<double>(1.0*uintdiv/max_unsigned_int_size);
+}
 
 // // Identical hashes for T,U and U,T, but that will never happen since T,U are ordered
 // struct pairhash {

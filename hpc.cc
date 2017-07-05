@@ -107,8 +107,7 @@ int main(int argc,char *argv[]){
     }
 
   }
-
-
+  
   if(inFileName == "noname"){
     cout << "Missing infile" << endl;
     cout << CALL_SYNTAX;
