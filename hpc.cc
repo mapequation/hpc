@@ -136,6 +136,7 @@ int main(int argc,char *argv[]){
   if(Nskiplines > 0)
     cout << "-->skipping " << Nskiplines << " lines";
   cout << "-->Will write clusters to file: " << outFileName << endl;
+  cout << "-->Will use number of threads: " <<  omp_get_max_threads() << endl;
 
   Partitions partitions(inFileName,outFileName,Nskiplines,distThreshold,splitDistThreshold,NsplitClu,Nattempts,NdistAttempts,seed);
 

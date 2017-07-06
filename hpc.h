@@ -241,6 +241,12 @@ double Partitions::wpJaccardDist(Partition *partition1, Partition *partition2){
 
 double Partitions::calcMaxDist(vector<Partition *> &partitionPtrs){
 
+	#ifdef _OPENMP
+	// Initiate locks to keep track of best solutions
+	omp_lock_t lock;
+  omp_init_lock(&lock);
+	#endif
+
 	int NClusterPartitions = partitionPtrs.size();
 	double maxDist = 0.0;
 	
@@ -256,14 +262,21 @@ double Partitions::calcMaxDist(vector<Partition *> &partitionPtrs){
 			randPartitionId = maxDistIdWithRandPartitionId;
 			maxDistIdWithRandPartitionId = randPartitionId;
 			maxDistWithRandPartitionId = 0.0;
+			#pragma omp parallel for
 			for(int i=0;i<NClusterPartitions;i++){
 				if(i != randPartitionId){
 					double dist = wpJaccardDist(partitionPtrs[randPartitionId],partitionPtrs[i]);
+					#ifdef _OPENMP
+					omp_set_lock(&lock);
+					#endif					
 					if(dist > maxDistWithRandPartitionId){									
 						maxDistWithRandPartitionId = dist; // Max in round
 						maxDistIdWithRandPartitionId = i;
 						maxDist = max(maxDist,dist); // Max overall
 					}
+					#ifdef _OPENMP
+					omp_unset_lock(&lock);
+					#endif
 				}
 			}
 			step++;
@@ -275,6 +288,12 @@ double Partitions::calcMaxDist(vector<Partition *> &partitionPtrs){
 }
 
 double Partitions::calcMaxDist(vector<Partition *> &partition1Ptrs,vector<Partition *> &partition2Ptrs){
+
+	#ifdef _OPENMP
+	// Initiate locks to keep track of best solutions
+	omp_lock_t lock;
+  omp_init_lock(&lock);
+	#endif
 
 	int NClusterPartitions1 = partition1Ptrs.size();
 	int NClusterPartitions2 = partition2Ptrs.size();
@@ -295,15 +314,22 @@ double Partitions::calcMaxDist(vector<Partition *> &partition1Ptrs,vector<Partit
 			maxDistIdWithRandPartitionId = randPartitionId;
 			maxDistWithRandPartitionId = 0.0;
 			Partition *partitionPtr1 = (randPartitionId < NClusterPartitions1) ? partition1Ptrs[randPartitionId] : partition2Ptrs[randPartitionId-NClusterPartitions1];
+			#pragma omp parallel for
 			for(int i=0;i<NClusterPartitions;i++){
 				if(i != randPartitionId){
 					Partition *partitionPtr2 = (i < NClusterPartitions1) ? partition1Ptrs[i] : partition2Ptrs[i-NClusterPartitions1];;
 					double dist = wpJaccardDist(partitionPtr1,partitionPtr2);
+					#ifdef _OPENMP
+					omp_set_lock(&lock);
+					#endif					
 					if(dist > maxDistWithRandPartitionId){									
 						maxDistWithRandPartitionId = dist; // Max in round
 						maxDistIdWithRandPartitionId = i;
 						maxDist = max(maxDist,dist); // Max overall
 					}
+					#ifdef _OPENMP
+					omp_unset_lock(&lock);
+					#endif					
 				}
 			}
 			step++;
