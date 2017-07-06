@@ -82,7 +82,6 @@ public:
 	vector<int> assignments;
 	unordered_map<int,int> clusterSizes;
 	double minDist = bignum;
-	double minDist2 = bignum;
 	Partition *minCenterPartition;
 };
 
@@ -115,7 +114,11 @@ private:
 	double wpJaccardDist(int partitionId1, int partitionId2);
 	double wpJaccardDist(Partition *partition1, Partition *partition2);
 	double calcMaxDist(vector<Partition *> &partitionPtrs);
+	double calcMaxDist(vector<Partition *> &partition1Ptrs,vector<Partition *> &partition2Ptrs);
+
 	void splitCluster(Clusters &clusters);
+	void mergeClusters(Clusters &clusters);
+
 	// double maxJaccardDiv(Cluster &clusterId1, Cluster &clusterId2);
 	// void findCenters(Medoids &medoids);
 	// void findClusters(Medoids &medoids);
@@ -133,7 +136,8 @@ private:
 	string outFileName;
 	int Nattempts = 1;
 	int NdistAttempts = 1;
-	double distThreshold = 0.1;
+	double distThreshold = 0.2;
+	double splitDistThreshold = 0.2;
 	vector<mt19937> mtRands;
 	ifstream ifs;
   string line;
@@ -144,16 +148,17 @@ private:
 	// unordered_map<pair<int,int>,double,pairhash> cachedWJSdiv;
 
 public:
-	Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,unsigned int NfinalClu,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int seed); 
+	Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int seed); 
 	void readPartitionsFile();
 	void clusterPartitions();
 	void printClusters();
 
 };
 
-Partitions::Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,unsigned int NfinalClu,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int seed){
+Partitions::Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int seed){
 	this->Nskiplines = Nskiplines;
 	this->distThreshold = distThreshold;
+	this->splitDistThreshold = splitDistThreshold;
 	this->NfinalClu = NfinalClu;
 	this->NsplitClu = NsplitClu;
 	this->Nattempts = Nattempts;
@@ -269,6 +274,46 @@ double Partitions::calcMaxDist(vector<Partition *> &partitionPtrs){
 	return maxDist;
 }
 
+double Partitions::calcMaxDist(vector<Partition *> &partition1Ptrs,vector<Partition *> &partition2Ptrs){
+
+	int NClusterPartitions1 = partition1Ptrs.size();
+	int NClusterPartitions2 = partition2Ptrs.size();
+	int NClusterPartitions = NClusterPartitions1 + NClusterPartitions2;
+
+	double maxDist = 0.0;
+	
+	for(int attempts=0;attempts < NdistAttempts; attempts++){
+		
+		int randPartitionId = randInt(0,NClusterPartitions-1);
+		int maxDistIdWithRandPartitionId = randPartitionId;
+		double maxDistWithRandPartitionId = 0.0;
+		
+		int Nsteps = 2;
+		int step = 0;
+		while(step < Nsteps){
+			randPartitionId = maxDistIdWithRandPartitionId;
+			maxDistIdWithRandPartitionId = randPartitionId;
+			maxDistWithRandPartitionId = 0.0;
+			Partition *partitionPtr1 = (randPartitionId < NClusterPartitions1) ? partition1Ptrs[randPartitionId] : partition2Ptrs[randPartitionId-NClusterPartitions1];
+			for(int i=0;i<NClusterPartitions;i++){
+				if(i != randPartitionId){
+					Partition *partitionPtr2 = (i < NClusterPartitions1) ? partition1Ptrs[i] : partition2Ptrs[i-NClusterPartitions1];;
+					double dist = wpJaccardDist(partitionPtr1,partitionPtr2);
+					if(dist > maxDistWithRandPartitionId){									
+						maxDistWithRandPartitionId = dist; // Max in round
+						maxDistIdWithRandPartitionId = i;
+						maxDist = max(maxDist,dist); // Max overall
+					}
+				}
+			}
+			step++;
+		}
+
+	}
+	
+	return maxDist;
+}
+
 void Partitions::clusterPartitions(){
 
 	cout << "Clustering partitions:" << endl;
@@ -290,22 +335,108 @@ void Partitions::clusterPartitions(){
 		clusters.sumMaxDist = maxDist;
 		clusters.sortedClusters.insert(make_pair(maxDist,partitionPtrs));
 
+		cout << "-->Attempt " << attempt+1 << "/" << Nattempts << ": First dividing " << Npartitions << " partitions..." << flush;
 		splitCluster(clusters);
+		cout << "into " << clusters.sortedClusters.size() << " clusters and then merging..." << flush;
+		mergeClusters(clusters);
 		double attemptNClusters = clusters.sortedClusters.size();
 		double attemptSumMaxDist = clusters.sumMaxDist;
-				
+		cout << "into " << attemptNClusters << " clusters with maximum distance " << clusters.sortedClusters.begin()->first << ", average maximum distance " << attemptSumMaxDist/attemptNClusters << ", and maximum cluster size " << clusters.maxClusterSize << ".";
+
 		// Update best solution
 
 		if( (attemptNClusters < bestNClusters) || ((attemptNClusters == bestNClusters) && (attemptSumMaxDist < bestSumMaxDist)) ){
 			bestNClusters = attemptNClusters;
 			bestSumMaxDist = attemptSumMaxDist;
 			bestClusters = move(clusters);
-			cout << "-->New best solution in attempt " << attempt+1 << "/" << Nattempts << ". " << Npartitions << " partitions into " << bestClusters.sortedClusters.size() << " clusters with maximum distance " << bestClusters.sortedClusters.begin()->first << ", average maximum distance " << bestClusters.sumMaxDist/bestClusters.sortedClusters.size() << ", and maximum cluster size " << bestClusters.maxClusterSize << endl;
+			cout << " New best solution!";
 		}
+		cout << endl;
 			
 	} // end of for loop
 
 }
+
+void Partitions::mergeClusters(Clusters &clusters){
+
+	unordered_map<int,SortedClusters::iterator> cluster_its;
+	unordered_map<int,set<pair<unsigned int,int> > > sortedDists;
+	multimap<unsigned int,int> minDists;
+
+	// Initiate priority queues
+	int clusterId1 = 0;
+	for(SortedClusters::iterator cluster1_it = clusters.sortedClusters.begin(); cluster1_it != clusters.sortedClusters.end(); cluster1_it++){
+		cluster_its[clusterId1] = cluster1_it;
+		int clusterId2 = clusterId1+1;
+		for(SortedClusters::iterator cluster2_it = next(cluster1_it); cluster2_it != clusters.sortedClusters.end(); cluster2_it++){
+			unsigned int dist = convert_div_to_uintdiv(calcMaxDist(cluster1_it->second,cluster2_it->second));
+			sortedDists[clusterId1].insert(make_pair(dist,clusterId2));
+			sortedDists[clusterId2].insert(make_pair(dist,clusterId1));
+			clusterId2++;
+		}
+
+		minDists.insert(make_pair(sortedDists[clusterId1].begin()->first,clusterId1));
+		clusterId1++;
+	}
+
+	while(convert_uintdiv_to_div(minDists.begin()->first) < distThreshold && clusters.sortedClusters.size() > 1){
+
+		multimap<unsigned int,int> newMinDists;
+
+		int clusterId1 = minDists.begin()->second;
+		int clusterId2 = sortedDists[clusterId1].begin()->second;
+
+		unsigned int newuintDist = sortedDists[clusterId1].begin()->first;
+		double newDist = convert_uintdiv_to_div(newuintDist);
+		SortedClusters::iterator cluster1_it = cluster_its[clusterId1];
+		SortedClusters::iterator cluster2_it = cluster_its[clusterId2];
+		int cluster1Size = cluster1_it->second.size();
+		int cluster2Size = cluster2_it->second.size();
+
+		// Merge partitions
+		vector<Partition *> mergedPartitions;
+		mergedPartitions.reserve(cluster1Size+cluster2Size);
+		mergedPartitions.insert(mergedPartitions.end(),make_move_iterator(cluster1_it->second.begin()),make_move_iterator(cluster1_it->second.end()));
+		mergedPartitions.insert(mergedPartitions.end(),make_move_iterator(cluster2_it->second.begin()),make_move_iterator(cluster2_it->second.end()));
+
+		clusters.maxClusterSize = max(clusters.maxClusterSize,static_cast<unsigned int>(cluster1Size+cluster2Size));
+		clusters.sumMaxDist += newDist - cluster1_it->first - cluster2_it->first;
+
+		// Delete and update old clusters and obsolete information
+		clusters.sortedClusters.erase(cluster_its[clusterId1]);
+		cluster_its[clusterId1] = clusters.sortedClusters.emplace(newDist,mergedPartitions);
+
+		unordered_map<int,set<pair<unsigned int,int> > >::iterator cluster1SortedDists_it = sortedDists.find(clusterId1);
+		for(set<pair<unsigned int,int> >::iterator it = next(cluster1SortedDists_it->second.begin()); it != cluster1SortedDists_it->second.end(); it++)
+			sortedDists[it->second].erase(make_pair(it->first,clusterId1));
+		cluster1SortedDists_it->second.clear();
+
+		clusters.sortedClusters.erase(cluster_its[clusterId2]);
+		cluster_its.erase(clusterId2);
+		unordered_map<int,set<pair<unsigned int,int> > >::iterator cluster2SortedDists_it = sortedDists.find(clusterId2);
+		for(set<pair<unsigned int,int> >::iterator it = next(cluster2SortedDists_it->second.begin()); it != cluster2SortedDists_it->second.end(); it++)
+			sortedDists[it->second].erase(make_pair(it->first,clusterId2));
+		sortedDists.erase(cluster2SortedDists_it);
+
+		// Update priority queues
+		for(multimap<unsigned int,int>::iterator it = next(minDists.begin()); it != minDists.end(); it++){
+			int clusterId = it->second;
+			if(clusterId != clusterId2){				
+				unsigned int dist = convert_div_to_uintdiv(calcMaxDist(cluster_its[clusterId1]->second,cluster_its[clusterId]->second));
+				sortedDists[clusterId1].insert(make_pair(dist,clusterId));
+				sortedDists[clusterId].insert(make_pair(dist,clusterId1));
+				newMinDists.insert(make_pair(sortedDists[clusterId].begin()->first,clusterId));
+			}
+		}
+
+
+		newMinDists.insert(make_pair(sortedDists[clusterId1].begin()->first,clusterId1));
+		swap(minDists,newMinDists);
+
+	}
+
+}
+
 
 void Partitions::splitCluster(Clusters &clusters){
 	// Modifies the order of cluster(s) such that the fist NsplitClu will be the centers.
@@ -428,10 +559,10 @@ void Partitions::splitCluster(Clusters &clusters){
 		clusters.sumMaxDist += newClusters_it->second.first;
 
 		clusters.maxClusterSize = max(clusters.maxClusterSize,static_cast<unsigned int>(newClusters_it->second.second.size()));
-		clusters.sortedClusters.insert(move(newClusters_it->second));
+		clusters.sortedClusters.emplace(newClusters_it->second);
 	} 
 
-	if(clusters.sortedClusters.begin()->first > distThreshold)
+	if(clusters.sortedClusters.begin()->first > splitDistThreshold)
 		splitCluster(clusters);
 
 }

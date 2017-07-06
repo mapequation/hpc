@@ -20,7 +20,7 @@ int main(int argc,char *argv[]){
   cout << endl;
 
   // Parse command input
-  const string CALL_SYNTAX = "Call: ./hpc [-h] [-s <seed>] [-N <number of attempts>] [-n <max distance iterations>] [-t <distance threshold>] [-k <number of clusters>] [-d <number of clusters in each division (>= 2)>] [--skiplines N] input_partitions.txt output_clustering_txt\n";
+  const string CALL_SYNTAX = "Call: ./hpc [-h] [-s <seed>] [-N <number of attempts>] [-n <max distance iterations>] [-t <distance threshold>] [-td <divisive distance threshold>] [-d <number of clusters in each division (>= 2)>] [--skiplines N] input_partitions.txt output_clustering_txt\n";
   if( argc == 1 ){
     cout << CALL_SYNTAX;
     exit(-1);
@@ -32,9 +32,10 @@ int main(int argc,char *argv[]){
   int Nskiplines = 0;
 
   int argNr = 1;
-  unsigned int NfinalClu = 100;
   unsigned int NsplitClu = 2;
-  double distThreshold = 0.0;
+  double distThreshold = 0.2;
+  double splitDistThreshold = distThreshold;
+  bool readSplitDistThreshold = false;
   int Nattempts = 1;
   int NdistAttempts = 1;
   while(argNr < argc){
@@ -43,10 +44,11 @@ int main(int argc,char *argv[]){
       cout << "seed: Any positive integer." << endl;  
       cout << "number of attempts: The number of clustering attempts. The best will be printed." << endl; 
       cout << "max distance attempts: The number of iterations to estimate the maximum distance in a cluster. Default is 1." << endl;  
-      cout << "max number of clusters: The max number of clusters after divisive clustering. Default is 100." << endl;  
-      cout << "nunmber of attempts: The number of attempts to optimize the cluster assignments. Default is 1." << endl;  
+      cout << "distance threshold: The max distance between two partitions in any cluster. Default is 0.2." << endl;
+      cout << "divisive distance threshold: The max distance between two partitions in any cluster when the divisive clustering stops. Default is distance threshold." << endl;  
       cout << "number of clusters in each division (>= 2): The number of clusters the cluster with highest divergence will be divided into. Default is 2." << endl;
-      cout << "--skiplines N: Skip N lines in input_partitions.txt before reading data  " << endl;  
+      cout << "number of attempts: The number of attempts to optimize the cluster assignments. Default is 1." << endl;  
+      cout << "--skiplines N: Skip N lines in input_partitions.txt before reading data." << endl;  
       cout << "input_partitions.txt: Each column corresponds to a partition and each row corresponds to a node id." << endl;  
       cout << "output_clustering.txt: clusterID partitionID" << endl;  
       cout << "-h: This help" << endl;
@@ -72,9 +74,10 @@ int main(int argc,char *argv[]){
       NdistAttempts = atoi(argv[argNr]);
       argNr++;
     }
-    else if(to_string(argv[argNr]) == "-k"){
+    else if(to_string(argv[argNr]) == "-dt"){
+      readSplitDistThreshold = true;
       argNr++;
-      NfinalClu = atoi(argv[argNr]);
+      splitDistThreshold = atof(argv[argNr]);
       argNr++;
     }
     else if(to_string(argv[argNr]) == "-t"){
@@ -107,7 +110,10 @@ int main(int argc,char *argv[]){
     }
 
   }
-  
+
+  if(!readSplitDistThreshold)
+    splitDistThreshold = distThreshold;
+
   if(inFileName == "noname"){
     cout << "Missing infile" << endl;
     cout << CALL_SYNTAX;
@@ -122,7 +128,7 @@ int main(int argc,char *argv[]){
   cout << "Setup:" << endl;
   cout << "-->Using seed: " << seed << endl;
   cout << "-->Will cluster partitions such that no cluster contains two partitions with distance larger than: " << distThreshold << endl;
-  cout << "-->[NOT IMPLEMENTED YET] Will let number of clusters reach: " << NfinalClu << endl;
+  cout << "-->Will first divide clusters until no cluster contains two partitions with distance larger than: " << splitDistThreshold << endl;
   cout << "-->Will iteratively divide worst cluster into number of clusters: " << NsplitClu << endl;
   cout << "-->Will make number of attempts: " << Nattempts << endl;
   cout << "-->Will estimate max distance in cluster with number of attempts: " << NdistAttempts << endl;
@@ -131,7 +137,7 @@ int main(int argc,char *argv[]){
     cout << "-->skipping " << Nskiplines << " lines";
   cout << "-->Will write clusters to file: " << outFileName << endl;
 
-  Partitions partitions(inFileName,outFileName,Nskiplines,distThreshold,NfinalClu,NsplitClu,Nattempts,NdistAttempts,seed);
+  Partitions partitions(inFileName,outFileName,Nskiplines,distThreshold,splitDistThreshold,NsplitClu,Nattempts,NdistAttempts,seed);
 
   partitions.clusterPartitions();
   partitions.printClusters();

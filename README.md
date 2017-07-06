@@ -16,21 +16,23 @@ just run 'make' in the current directory to compile the
 code with the included Makefile.
 
 
-Call: ./hpc [-h] [-s \<seed\>] [-N \<number of attempts\>] [-n \<max distance iterations\>] [-t \<distance threshold\>] [-k \<max number of clusters\>] [-d \<number of clusters in each division (>= 2)\>] [--skiplines N] input_partitions.txt output_clustering_txt  
+Call: ./hpc [-h] [-s \<seed\>] [-N \<number of attempts\>] [-n \<max distance iterations\>] [-t \<distance threshold\>] [-td \<divisive distance threshold\>] [-d \<number of clusters in each division (>= 2)\>] [--skiplines N] input_partitions.txt output_clustering_txt  
 
 seed: Any positive integer.  
-number of attempts: The number of clustering attempts. The best will be printed.  
-max distance attempts: The number of iterations to estimate the maximum distance in a cluster. Default is 1.
-max number of clusters: The max number of clusters after divisive clustering. Default is 100.  
-nunmber of attempts: The number of attempts to optimize the cluster assignments. Default is 1.  
+number of attempts: The number of clustering attempts. The best will be printed.   
+max distance attempts: The number of iterations to estimate the maximum distance in a cluster. Default is 1.   
+distance threshold: The max distance between two partitions in any cluster. Default is 0.2.  
+divisive distance threshold: The max distance between two partitions in any cluster when the divisive clustering stops. Default is distance threshold.    
 number of clusters in each division (>= 2): The number of clusters the cluster with highest divergence will be divided into. Default is 2.  
---skiplines N: Skip N lines in input_partitions.txt before reading data    
+number of attempts: The number of attempts to optimize the cluster assignments. Default is 1.  
+--skiplines N: Skip N lines in input_partitions.txt before reading data.   
 input_partitions.txt: Each column corresponds to a partition and each row corresponds to a node id.  
-output_clustering.txt: clusterID partitionID  
+output_clustering.txt: clusterID partitionID.  
+-h: This help.  
 
 Example:
 
-./hpc -N 10 -s 123 -t 0.5 input_partitions.txt output_clustering.txt    
+./hpc -N 10 -s 123 -t 0.5 -td 0.5 input_partitions.txt output_clustering.txt    
 
 input_partitions.txt  
 1 1 1 1 1 1 6 1 1 1  
