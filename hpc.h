@@ -352,15 +352,14 @@ void Partitions::clusterPartitions(){
 	for(int i=0;i<Npartitions;i++)
 		partitionPtrs[i] = &partitions[i];
 
-  for(int attempt=0;attempt<Nattempts;attempt++){
-		
-		double maxDist = calcMaxDist(partitionPtrs);
+  	for(int attempt=0;attempt<Nattempts;attempt++){
 
+  		double maxDist = calcMaxDist(partitionPtrs);
 		Clusters clusters;
 		clusters.maxClusterSize = Npartitions;
 		clusters.sumMaxDist = maxDist;
 		clusters.sortedClusters.insert(make_pair(maxDist,partitionPtrs));
-
+		
 		cout << "-->Attempt " << attempt+1 << "/" << Nattempts << ": First dividing " << Npartitions << " partitions..." << flush;
 		splitCluster(clusters);
 		cout << "into " << clusters.sortedClusters.size() << " clusters and then merging..." << flush;
@@ -375,6 +374,8 @@ void Partitions::clusterPartitions(){
 			bestNClusters = attemptNClusters;
 			bestSumMaxDist = attemptSumMaxDist;
 			bestClusters = move(clusters);
+			// bestClusters = clusters;
+
 			cout << " New best solution!";
 		}
 		cout << endl;
@@ -440,8 +441,9 @@ void Partitions::mergeClusters(Clusters &clusters){
 		clusters.sortedClusters.erase(cluster_its[clusterId2]);
 		cluster_its.erase(clusterId2);
 		unordered_map<int,set<pair<unsigned int,int> > >::iterator cluster2SortedDists_it = sortedDists.find(clusterId2);
-		for(set<pair<unsigned int,int> >::iterator it = next(cluster2SortedDists_it->second.begin()); it != cluster2SortedDists_it->second.end(); it++)
-			sortedDists[it->second].erase(make_pair(it->first,clusterId2));
+		for(set<pair<unsigned int,int> >::iterator it = cluster2SortedDists_it->second.begin(); it != cluster2SortedDists_it->second.end(); it++)
+			if(it->second != clusterId1)
+				sortedDists[it->second].erase(make_pair(it->first,clusterId2));
 		sortedDists.erase(cluster2SortedDists_it);
 
 		// Update priority queues
