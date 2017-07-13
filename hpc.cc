@@ -20,7 +20,7 @@ int main(int argc,char *argv[]){
   cout << endl;
 
   // Parse command input
-  const string CALL_SYNTAX = "Call: ./hpc [-h] [-s <seed>] [-N <number of attempts>] [-n <max distance iterations>] [-t <distance threshold>] [-td <divisive distance threshold>] [-d <number of clusters in each division (>= 2)>] [--skiplines N] input_partitions.txt output_clustering_txt\n";
+  const string CALL_SYNTAX = "Call: ./hpc [-h] [-s <seed>] [-N <number of attempts>] [-n <max distance iterations>] [-t <distance threshold>] [-dt <divisive distance threshold>] [-d <number of clusters in each division (>= 2)>] [--skiplines N] input_partitions.txt output_clustering_txt\n";
   if( argc == 1 ){
     cout << CALL_SYNTAX;
     exit(-1);

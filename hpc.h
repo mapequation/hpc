@@ -352,9 +352,10 @@ void Partitions::clusterPartitions(){
 	for(int i=0;i<Npartitions;i++)
 		partitionPtrs[i] = &partitions[i];
 
-  	for(int attempt=0;attempt<Nattempts;attempt++){
+	double maxDist = calcMaxDist(partitionPtrs);
 
-  		double maxDist = calcMaxDist(partitionPtrs);
+  	for(int attempt=0;attempt<Nattempts;attempt++){
+  		
 		Clusters clusters;
 		clusters.maxClusterSize = Npartitions;
 		clusters.sumMaxDist = maxDist;

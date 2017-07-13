@@ -16,7 +16,7 @@ just run 'make' in the current directory to compile the
 code with the included Makefile.
 
 
-Call: ./hpc [-h] [-s \<seed\>] [-N \<number of attempts\>] [-n \<max distance iterations\>] [-t \<distance threshold\>] [-td \<divisive distance threshold\>] [-d \<number of clusters in each division (>= 2)\>] [--skiplines N] input_partitions.txt output_clustering_txt  
+Call: ./hpc [-h] [-s \<seed\>] [-N \<number of attempts\>] [-n \<max distance iterations\>] [-t \<distance threshold\>] [-dt \<divisive distance threshold\>] [-d \<number of clusters in each division (>= 2)\>] [--skiplines N] input_partitions.txt output_clustering_txt  
 
 seed: Any positive integer.  
 number of attempts: The number of clustering attempts. The best will be printed.   
@@ -32,7 +32,7 @@ output_clustering.txt: clusterID partitionID.
 
 Example:
 
-./hpc -N 10 -s 123 -t 0.5 -td 0.5 input_partitions.txt output_clustering.txt    
+./hpc -N 10 -s 123 -t 0.5 -dt 0.5 input_partitions.txt output_clustering.txt    
 
 input_partitions.txt  
 1 1 1 1 1 1 6 1 1 1  
