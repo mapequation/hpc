@@ -15,6 +15,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <algorithm>
+#include <numeric>
 #ifdef _OPENMP
 #include <omp.h>
 #include <stdio.h>
@@ -43,6 +44,33 @@ inline string to_string (const T& t){
 	stringstream ss;
 	ss << t;
 	return ss.str();
+}
+
+vector<string> tokenize(const string& str,string& delimiters)
+{
+
+  vector<string> tokens;
+
+  // skip delimiters at beginning.
+  string::size_type lastPos = str.find_first_not_of(delimiters, 0);
+
+  // find first "non-delimiter".
+  string::size_type pos = str.find_first_of(delimiters, lastPos);
+
+  while (string::npos != pos || string::npos != lastPos){
+
+    // found a token, add it to the vector.
+    tokens.push_back(str.substr(lastPos, pos - lastPos));
+
+    // skip delimiters.  Note the "not_of"
+    lastPos = str.find_first_not_of(delimiters, pos);
+
+    // find next "non-delimiter"
+    pos = str.find_first_of(delimiters, lastPos);
+
+  }
+
+  return tokens;
 }
 
 struct pairhash {
@@ -79,7 +107,7 @@ public:
 	Partition();
 	Partition(int partitionid, int Nnodes);
 	int partitionId;
-	vector<int> assignments;
+	vector<vector<int> > assignments;
 	unordered_map<int,int> clusterSizes;
 	double minDist = bignum;
 	Partition *minCenterPartition;
@@ -90,7 +118,7 @@ Partition::Partition(){
 
 Partition::Partition(int partitionid, int Nnodes){
 	partitionId = partitionid;
-	assignments = vector<int>(Nnodes);
+	assignments = vector<vector<int> >(Nnodes);
 }
 
 typedef multimap< double, vector<Partition *>, greater<double> > SortedClusters;
@@ -205,19 +233,28 @@ double Partitions::randDouble(double to){
 
 double Partitions::wpJaccardDist(int partitionId1, int partitionId2){
 
-
 	unordered_map<pair<int,int>,int,pairhash> jointM;
 	for(int k=0;k<Nnodes;k++){
-	  jointM[make_pair(partitions[partitionId1].assignments[k],partitions[partitionId2].assignments[k])]++;
+		for(vector<int>::iterator it_id1 = partitions[partitionId1].assignments[k].begin(); it_id1 != partitions[partitionId1].assignments[k].end(); it_id1++)
+	  	for(vector<int>::iterator it_id2 = partitions[partitionId2].assignments[k].begin(); it_id2 != partitions[partitionId2].assignments[k].end(); it_id2++)
+	  		jointM[make_pair((*it_id1),(*it_id2))]++;
 	}
-	double sim = 0.0;
+	
+	int partitionId1Size = partitions[partitionId1].clusterSizes.size();
+	int partitionId2Size = partitions[partitionId2].clusterSizes.size();
+	vector<double> maxClusterSimilarityPartitionId1(partitionId1Size,0.0);
+	vector<double> maxClusterSimilarityPartitionId2(partitionId2Size,0.0);
+
 	for(unordered_map<pair<int,int>,int,pairhash>::iterator it = jointM.begin(); it != jointM.end(); it++){
 	  int Ncommon = it->second;
 	  int Ntotal = partitions[partitionId1].clusterSizes[it->first.first] + partitions[partitionId2].clusterSizes[it->first.second] - Ncommon;
-	  sim += 1.0*Ncommon*Ncommon/(Nnodes*Ntotal);
+	  double clusterSim = 1.0*Ncommon/Ntotal;
+	  maxClusterSimilarityPartitionId1[it->first.first] = max(clusterSim,maxClusterSimilarityPartitionId1[it->first.first]);
+	  maxClusterSimilarityPartitionId2[it->first.second] = max(clusterSim,maxClusterSimilarityPartitionId2[it->first.second]);
 	}
      
-	return 1.0 - sim;
+	return 1.0 - 0.5*accumulate(maxClusterSimilarityPartitionId1.begin(),maxClusterSimilarityPartitionId1.end(),0.0)/partitionId1Size\
+						-0.5*accumulate(maxClusterSimilarityPartitionId2.begin(),maxClusterSimilarityPartitionId2.end(),0.0)/partitionId2Size;
 
 }
 
@@ -226,16 +263,27 @@ double Partitions::wpJaccardDist(Partition *partition1, Partition *partition2){
 
 	unordered_map<pair<int,int>,int,pairhash> jointM;
 	for(int k=0;k<Nnodes;k++){
-	  jointM[make_pair(partition1->assignments[k],partition2->assignments[k])]++;
+		for(vector<int>::iterator it_id1 = partition1->assignments[k].begin(); it_id1 != partition1->assignments[k].end(); it_id1++)
+	  	for(vector<int>::iterator it_id2 = partition2->assignments[k].begin(); it_id2 != partition2->assignments[k].end(); it_id2++)
+	  		jointM[make_pair((*it_id1),(*it_id2))]++;
 	}
-	double sim = 0.0;
+	
+	int partitionId1Size = partition1->clusterSizes.size();
+	int partitionId2Size = partition2->clusterSizes.size();
+	vector<double> maxClusterSimilarityPartitionId1(partitionId1Size,0.0);
+	vector<double> maxClusterSimilarityPartitionId2(partitionId2Size,0.0);
+
 	for(unordered_map<pair<int,int>,int,pairhash>::iterator it = jointM.begin(); it != jointM.end(); it++){
 	  int Ncommon = it->second;
 	  int Ntotal = partition1->clusterSizes[it->first.first] + partition2->clusterSizes[it->first.second] - Ncommon;
-	  sim += 1.0*Ncommon*Ncommon/(Nnodes*Ntotal);
+	  double clusterSim = 1.0*Ncommon/Ntotal;
+	  maxClusterSimilarityPartitionId1[it->first.first] = max(clusterSim,maxClusterSimilarityPartitionId1[it->first.first]);
+	  maxClusterSimilarityPartitionId2[it->first.second] = max(clusterSim,maxClusterSimilarityPartitionId2[it->first.second]);
 	}
      
-	return 1.0 - sim;
+	return 1.0 - 0.5*accumulate(maxClusterSimilarityPartitionId1.begin(),maxClusterSimilarityPartitionId1.end(),0.0)/partitionId1Size\
+						-0.5*accumulate(maxClusterSimilarityPartitionId2.begin(),maxClusterSimilarityPartitionId2.end(),0.0)/partitionId2Size;
+
 
 }
 
@@ -631,6 +679,9 @@ void Partitions::readPartitionsFile(){
   	partitions[i] = Partition(i,Nnodes);
 
   // Restart from beginning of file
+  vector<map<string,int> > partitionsAssignmentId(Npartitions);
+  vector<int> partitionsAssignmentIds(Npartitions,0);
+  string delim = ":";
   ifs.clear();
   ifs.seekg(0, ios::beg);
 
@@ -643,9 +694,26 @@ void Partitions::readPartitionsFile(){
       istringstream read(line);
       int i = 0;
       while(read >> buf){
-      	int assignment = atoi(buf.c_str());
-        partitions[i].assignments[nodeNr] = assignment; 
-        partitions[i].clusterSizes[assignment]++;
+      	string assignment = buf.c_str();
+      	vector<string> assignments = tokenize(assignment,delim);
+      	string assignmentKey = "";
+      	for(vector<string>::iterator it = assignments.begin(); it != assignments.end(); it++){
+      		assignmentKey += (*it) + ":";
+      		map<string,int>::iterator assignmentId_it = partitionsAssignmentId[i].find(assignmentKey);
+      		int assignmentId = partitionsAssignmentIds[i];
+      		if(assignmentId_it != partitionsAssignmentId[i].end()){
+				assignmentId = assignmentId_it->second;
+      		}
+      		else{
+      			partitionsAssignmentId[i][assignmentKey] = partitionsAssignmentIds[i];
+      			partitionsAssignmentIds[i]++;
+      		}
+      		partitions[i].assignments[nodeNr].push_back(assignmentId); 
+        	partitions[i].clusterSizes[assignmentId]++;
+      	}
+
+
+        
         i++;
       }
       nodeNr++;
