@@ -139,7 +139,7 @@ Clusters::Clusters(){
 class Partitions{
 private:
 
-	double wpJaccardDist(int partitionId1, int partitionId2);
+	// double wpJaccardDist(int partitionId1, int partitionId2);
 	double wpJaccardDist(Partition *partition1, Partition *partition2);
 	double calcMaxDist(vector<Partition *> &partitionPtrs);
 	double calcMaxDist(vector<Partition *> &partition1Ptrs,vector<Partition *> &partition2Ptrs);
@@ -231,58 +231,124 @@ double Partitions::randDouble(double to){
 
 }
 
-double Partitions::wpJaccardDist(int partitionId1, int partitionId2){
+// double Partitions::wpJaccardDist(int partitionId1, int partitionId2){
 
-	unordered_map<pair<int,int>,int,pairhash> jointM;
-	for(int k=0;k<Nnodes;k++){
-		for(vector<int>::iterator it_id1 = partitions[partitionId1].assignments[k].begin(); it_id1 != partitions[partitionId1].assignments[k].end(); it_id1++)
-	  	for(vector<int>::iterator it_id2 = partitions[partitionId2].assignments[k].begin(); it_id2 != partitions[partitionId2].assignments[k].end(); it_id2++)
-	  		jointM[make_pair((*it_id1),(*it_id2))]++;
-	}
+// 	unordered_map<pair<int,int>,int,pairhash> jointM;
+// 	for(int k=0;k<Nnodes;k++){
+// 		for(vector<int>::iterator it_id1 = partitions[partitionId1].assignments[k].begin(); it_id1 != partitions[partitionId1].assignments[k].end(); it_id1++)
+// 	  	for(vector<int>::iterator it_id2 = partitions[partitionId2].assignments[k].begin(); it_id2 != partitions[partitionId2].assignments[k].end(); it_id2++)
+// 	  		jointM[make_pair((*it_id1),(*it_id2))]++;
+// 	}
 	
-	int partitionId1Size = partitions[partitionId1].clusterSizes.size();
-	int partitionId2Size = partitions[partitionId2].clusterSizes.size();
-	vector<double> maxClusterSimilarityPartitionId1(partitionId1Size,0.0);
-	vector<double> maxClusterSimilarityPartitionId2(partitionId2Size,0.0);
+// 	int partitionId1Size = partitions[partitionId1].clusterSizes.size();
+// 	int partitionId2Size = partitions[partitionId2].clusterSizes.size();
+// 	vector<double> maxClusterSimilarityPartitionId1(partitionId1Size,0.0);
+// 	vector<int> maxClusterSimilarityClusterSizePartitionId1(partitionId1Size,0);
+// 	vector<double> maxClusterSimilarityPartitionId2(partitionId2Size,0.0);
+// 	vector<int> maxClusterSimilarityClusterSizePartitionId2(partitionId2Size,0);
 
-	for(unordered_map<pair<int,int>,int,pairhash>::iterator it = jointM.begin(); it != jointM.end(); it++){
-	  int Ncommon = it->second;
-	  int Ntotal = partitions[partitionId1].clusterSizes[it->first.first] + partitions[partitionId2].clusterSizes[it->first.second] - Ncommon;
-	  double clusterSim = 1.0*Ncommon/Ntotal;
-	  maxClusterSimilarityPartitionId1[it->first.first] = max(clusterSim,maxClusterSimilarityPartitionId1[it->first.first]);
-	  maxClusterSimilarityPartitionId2[it->first.second] = max(clusterSim,maxClusterSimilarityPartitionId2[it->first.second]);
-	}
+// 	for(unordered_map<pair<int,int>,int,pairhash>::iterator it = jointM.begin(); it != jointM.end(); it++){
+// 	  int Ncommon = it->second;
+// 	  int Ntotal = partitions[partitionId1].clusterSizes[it->first.first] + partitions[partitionId2].clusterSizes[it->first.second] - Ncommon;
+// 	  double clusterSim = 1.0*Ncommon/Ntotal;
+
+// 	  if(clusterSim > maxClusterSimilarityPartitionId1[it->first.first]){
+// 	  	maxClusterSimilarityPartitionId1[it->first.first] = clusterSim;
+// 	  	maxClusterSimilarityClusterSizePartitionId1[it->first.first] = partitions[partitionId1].clusterSizes[it->first.first];
+// 	  }
+
+// 	  if(clusterSim > maxClusterSimilarityPartitionId2[it->first.second]){
+// 	  	maxClusterSimilarityPartitionId2[it->first.second] = clusterSim;
+// 	  	maxClusterSimilarityClusterSizePartitionId2[it->first.second] = partitions[partitionId2].clusterSizes[it->first.second];
+// 	  }
+
+// 	}
+
+// 	int NassignmentsId1 = 0;
+// 	double simId1 = 0.0;
+// 	for(int i=0;i<partitionId1Size;i++){
+// 		simId1 += maxClusterSimilarityPartitionId1[i]*maxClusterSimilarityClusterSizePartitionId1[i];
+// 		NassignmentsId1 += maxClusterSimilarityClusterSizePartitionId1[i];
+// 	}
+// 	simId1 /= 1.0*NassignmentsId1;
+
+// 	int NassignmentsId2 = 0;
+// 	double simId2 = 0.0;
+// 	for(int i=0;i<partitionId2Size;i++){
+// 		simId2 += maxClusterSimilarityPartitionId2[i]*maxClusterSimilarityClusterSizePartitionId2[i];
+// 		NassignmentsId2 += maxClusterSimilarityClusterSizePartitionId2[i];
+// 	}
+// 	simId2 /= 1.0*NassignmentsId2;
+
      
-	return 1.0 - 0.5*accumulate(maxClusterSimilarityPartitionId1.begin(),maxClusterSimilarityPartitionId1.end(),0.0)/partitionId1Size\
-						-0.5*accumulate(maxClusterSimilarityPartitionId2.begin(),maxClusterSimilarityPartitionId2.end(),0.0)/partitionId2Size;
+// 	return 1.0 - 0.5*simId1 - 0.5*simId2;
 
-}
+// }
 
 double Partitions::wpJaccardDist(Partition *partition1, Partition *partition2){
 
+	// cout << partition1->partitionId << " " << partition2->partitionId << endl;
 
 	unordered_map<pair<int,int>,int,pairhash> jointM;
 	for(int k=0;k<Nnodes;k++){
-		for(vector<int>::iterator it_id1 = partition1->assignments[k].begin(); it_id1 != partition1->assignments[k].end(); it_id1++)
+		for(vector<int>::iterator it_id1 = partition1->assignments[k].begin(); it_id1 != partition1->assignments[k].end(); it_id1++){
+			// cout << k << " " << (*it_id1) << endl;
 	  	for(vector<int>::iterator it_id2 = partition2->assignments[k].begin(); it_id2 != partition2->assignments[k].end(); it_id2++)
 	  		jointM[make_pair((*it_id1),(*it_id2))]++;
+	  }
 	}
+	// cout << endl;
 	
 	int partitionId1Size = partition1->clusterSizes.size();
 	int partitionId2Size = partition2->clusterSizes.size();
 	vector<double> maxClusterSimilarityPartitionId1(partitionId1Size,0.0);
+	vector<int> maxClusterSimilarityClusterSizePartitionId1(partitionId1Size,0);
 	vector<double> maxClusterSimilarityPartitionId2(partitionId2Size,0.0);
+	vector<int> maxClusterSimilarityClusterSizePartitionId2(partitionId2Size,0);
+	// cout << partitionId1Size << " " << partitionId2Size << endl;
 
 	for(unordered_map<pair<int,int>,int,pairhash>::iterator it = jointM.begin(); it != jointM.end(); it++){
+
 	  int Ncommon = it->second;
 	  int Ntotal = partition1->clusterSizes[it->first.first] + partition2->clusterSizes[it->first.second] - Ncommon;
 	  double clusterSim = 1.0*Ncommon/Ntotal;
-	  maxClusterSimilarityPartitionId1[it->first.first] = max(clusterSim,maxClusterSimilarityPartitionId1[it->first.first]);
-	  maxClusterSimilarityPartitionId2[it->first.second] = max(clusterSim,maxClusterSimilarityPartitionId2[it->first.second]);
+		// cout << it->first.first << " " << it->first.second << " " << it->second << " " << partition1->clusterSizes[it->first.first] << " " << partition2->clusterSizes[it->first.second] << " " << clusterSim << endl;
+
+	  if(clusterSim > maxClusterSimilarityPartitionId1[it->first.first]){
+	  	maxClusterSimilarityPartitionId1[it->first.first] = clusterSim;
+	  	maxClusterSimilarityClusterSizePartitionId1[it->first.first] = partition1->clusterSizes[it->first.first];
+	  }
+
+	  if(clusterSim > maxClusterSimilarityPartitionId2[it->first.second]){
+	  	maxClusterSimilarityPartitionId2[it->first.second] = clusterSim;
+	  	maxClusterSimilarityClusterSizePartitionId2[it->first.second] = partition2->clusterSizes[it->first.second];
+	  }
+
 	}
-     
-	return 1.0 - 0.5*accumulate(maxClusterSimilarityPartitionId1.begin(),maxClusterSimilarityPartitionId1.end(),0.0)/partitionId1Size\
-						-0.5*accumulate(maxClusterSimilarityPartitionId2.begin(),maxClusterSimilarityPartitionId2.end(),0.0)/partitionId2Size;
+	// cout << endl;
+
+	int NassignmentsId1 = 0;
+	double simId1 = 0.0;
+	for(int i=0;i<partitionId1Size;i++){
+		simId1 += maxClusterSimilarityPartitionId1[i]*maxClusterSimilarityClusterSizePartitionId1[i];
+		NassignmentsId1 += maxClusterSimilarityClusterSizePartitionId1[i];
+		// cout << maxClusterSimilarityPartitionId1[i] << endl;
+	}
+
+	simId1 /= 1.0*NassignmentsId1;
+
+	int NassignmentsId2 = 0;
+	double simId2 = 0.0;
+	for(int i=0;i<partitionId2Size;i++){
+		simId2 += maxClusterSimilarityPartitionId2[i]*maxClusterSimilarityClusterSizePartitionId2[i];
+		NassignmentsId2 += maxClusterSimilarityClusterSizePartitionId2[i];
+	}
+	simId2 /= 1.0*NassignmentsId2;
+
+  // cout <<   1.0 - 0.5*simId1 - 0.5*simId2 << endl; 
+  		// abort();
+	return 1.0 - 0.5*simId1 - 0.5*simId2;
+
 
 
 }
@@ -702,7 +768,7 @@ void Partitions::readPartitionsFile(){
       		map<string,int>::iterator assignmentId_it = partitionsAssignmentId[i].find(assignmentKey);
       		int assignmentId = partitionsAssignmentIds[i];
       		if(assignmentId_it != partitionsAssignmentId[i].end()){
-				assignmentId = assignmentId_it->second;
+						assignmentId = assignmentId_it->second;
       		}
       		else{
       			partitionsAssignmentId[i][assignmentKey] = partitionsAssignmentIds[i];
