@@ -287,69 +287,48 @@ double Partitions::randDouble(double to){
 
 double Partitions::wpJaccardDist(Partition *partition1, Partition *partition2){
 
-	// cout << partition1->partitionId << " " << partition2->partitionId << endl;
+	int partitionId1Size = partition1->clusterSizes.size();
+	int partitionId2Size = partition2->clusterSizes.size();
+	vector<double> maxClusterSimilarityPartitionId1(partitionId1Size,0.0);
+	vector<double> maxClusterSimilarityPartitionId2(partitionId2Size,0.0);
 
 	unordered_map<pair<int,int>,int,pairhash> jointM;
 	for(int k=0;k<Nnodes;k++){
 		for(vector<int>::iterator it_id1 = partition1->assignments[k].begin(); it_id1 != partition1->assignments[k].end(); it_id1++){
-			// cout << k << " " << (*it_id1) << endl;
 	  	for(vector<int>::iterator it_id2 = partition2->assignments[k].begin(); it_id2 != partition2->assignments[k].end(); it_id2++)
 	  		jointM[make_pair((*it_id1),(*it_id2))]++;
 	  }
 	}
-	// cout << endl;
 	
-	int partitionId1Size = partition1->clusterSizes.size();
-	int partitionId2Size = partition2->clusterSizes.size();
-	vector<double> maxClusterSimilarityPartitionId1(partitionId1Size,0.0);
-	vector<int> maxClusterSimilarityClusterSizePartitionId1(partitionId1Size,0);
-	vector<double> maxClusterSimilarityPartitionId2(partitionId2Size,0.0);
-	vector<int> maxClusterSimilarityClusterSizePartitionId2(partitionId2Size,0);
-	// cout << partitionId1Size << " " << partitionId2Size << endl;
+
 
 	for(unordered_map<pair<int,int>,int,pairhash>::iterator it = jointM.begin(); it != jointM.end(); it++){
 
 	  int Ncommon = it->second;
 	  int Ntotal = partition1->clusterSizes[it->first.first] + partition2->clusterSizes[it->first.second] - Ncommon;
 	  double clusterSim = 1.0*Ncommon/Ntotal;
-		// cout << it->first.first << " " << it->first.second << " " << it->second << " " << partition1->clusterSizes[it->first.first] << " " << partition2->clusterSizes[it->first.second] << " " << clusterSim << endl;
-
-	  if(clusterSim > maxClusterSimilarityPartitionId1[it->first.first]){
-	  	maxClusterSimilarityPartitionId1[it->first.first] = clusterSim;
-	  	maxClusterSimilarityClusterSizePartitionId1[it->first.first] = partition1->clusterSizes[it->first.first];
-	  }
-
-	  if(clusterSim > maxClusterSimilarityPartitionId2[it->first.second]){
-	  	maxClusterSimilarityPartitionId2[it->first.second] = clusterSim;
-	  	maxClusterSimilarityClusterSizePartitionId2[it->first.second] = partition2->clusterSizes[it->first.second];
-	  }
+	  maxClusterSimilarityPartitionId1[it->first.first] = max(clusterSim,maxClusterSimilarityPartitionId1[it->first.first]);
+	  maxClusterSimilarityPartitionId2[it->first.second] = max(clusterSim,maxClusterSimilarityPartitionId2[it->first.second]);
 
 	}
-	// cout << endl;
 
 	int NassignmentsId1 = 0;
 	double simId1 = 0.0;
 	for(int i=0;i<partitionId1Size;i++){
-		simId1 += maxClusterSimilarityPartitionId1[i]*maxClusterSimilarityClusterSizePartitionId1[i];
-		NassignmentsId1 += maxClusterSimilarityClusterSizePartitionId1[i];
-		// cout << maxClusterSimilarityPartitionId1[i] << endl;
+		simId1 += maxClusterSimilarityPartitionId1[i]*partition1->clusterSizes[i];
+		NassignmentsId1 += partition1->clusterSizes[i];
 	}
-
 	simId1 /= 1.0*NassignmentsId1;
 
 	int NassignmentsId2 = 0;
 	double simId2 = 0.0;
 	for(int i=0;i<partitionId2Size;i++){
-		simId2 += maxClusterSimilarityPartitionId2[i]*maxClusterSimilarityClusterSizePartitionId2[i];
-		NassignmentsId2 += maxClusterSimilarityClusterSizePartitionId2[i];
+		simId2 += maxClusterSimilarityPartitionId2[i]*partition2->clusterSizes[i];
+		NassignmentsId2 += partition2->clusterSizes[i];
 	}
 	simId2 /= 1.0*NassignmentsId2;
 
-  // cout <<   1.0 - 0.5*simId1 - 0.5*simId2 << endl; 
-  		// abort();
 	return 1.0 - 0.5*simId1 - 0.5*simId2;
-
-
 
 }
 
@@ -481,7 +460,7 @@ void Partitions::clusterPartitions(){
 		mergeClusters(clusters);
 		double attemptNClusters = clusters.sortedClusters.size();
 		double attemptSumMaxDist = clusters.sumMaxDist;
-		cout << "into " << attemptNClusters << " clusters with maximum distance " << clusters.sortedClusters.begin()->first << ", average maximum distance " << attemptSumMaxDist/attemptNClusters << ", and maximum cluster size " << clusters.maxClusterSize << ".";
+		cout << "into " << attemptNClusters << " clusters with maximum internal distance " << clusters.sortedClusters.begin()->first << ", average maximum internal distance " << attemptSumMaxDist/attemptNClusters << ", and maximum cluster size " << clusters.maxClusterSize << ".";
 
 		// Update best solution
 
@@ -797,12 +776,12 @@ void Partitions::printClusters(){
   my_ofstream ofs;
 	ofs.open(outFileName.c_str());
 	int i = 1;
-	ofs << "# Clustered " << Npartitions << " partitions into " << bestClusters.sortedClusters.size() << " clusters with maximum distance " << bestClusters.sortedClusters.begin()->first << ", average maximum distance " << bestClusters.sumMaxDist/bestClusters.sortedClusters.size() << ", and maximum cluster size " << bestClusters.maxClusterSize << endl;
+	ofs << "# Clustered " << Npartitions << " partitions into " << bestClusters.sortedClusters.size() << " clusters with maximum internal distance " << bestClusters.sortedClusters.begin()->first << ", average maximum internal distance " << bestClusters.sumMaxDist/bestClusters.sortedClusters.size() << ", and maximum cluster size " << bestClusters.maxClusterSize << endl;
 	ofs << "# ClusterId PartitionId" << endl;
 	for(SortedClusters::iterator cluster_it = bestClusters.sortedClusters.begin(); cluster_it != bestClusters.sortedClusters.end(); cluster_it++){
 		vector<Partition *> &cluster = cluster_it->second;
 		int clusterSize = cluster.size();
-		ofs << "# Cluster " << i << ": " << clusterSize << " nodes with max distance " << cluster_it->first << endl;
+		ofs << "# Cluster " << i << ": " << clusterSize << " nodes with max internal distance " << cluster_it->first << endl;
 
 		set<int> orderedPartitionIds;
 		for(vector<Partition *>::iterator partition_it = cluster.begin(); partition_it != cluster.end(); partition_it++)

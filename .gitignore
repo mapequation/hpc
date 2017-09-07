@@ -8,3 +8,7 @@ hpc
 output.txt
 
 output_multilevel_partitions.txt
+
+input_partitions_test.txt
+
+test.txt
