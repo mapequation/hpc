@@ -153,9 +153,11 @@ private:
 	// double updateCenters(unordered_map<int,pair<double,vector<LocalStateNode> > > &newMedoids);
 	
 	vector<Partition> partitions;
+	vector<Partition> validationPartitions;
 	int Nskiplines = 0;
 	int Nnodes = 0;
 	int Npartitions = 0;
+	int NvalidationPartitions = 0;
 
 	int randInt(int from, int to);
 	double randDouble(double to);
@@ -176,14 +178,14 @@ private:
 	// unordered_map<pair<int,int>,double,pairhash> cachedWJSdiv;
 
 public:
-	Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int seed); 
+	Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int NvalidationPartitions,int seed); 
 	void readPartitionsFile();
 	void clusterPartitions();
 	void printClusters();
-
+	void validatePartitions();
 };
 
-Partitions::Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int seed){
+Partitions::Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int NvalidationPartitions,int seed){
 	this->Nskiplines = Nskiplines;
 	this->distThreshold = distThreshold;
 	this->splitDistThreshold = splitDistThreshold;
@@ -191,6 +193,7 @@ Partitions::Partitions(string inFileName,string outFileName,int Nskiplines,doubl
 	this->NsplitClu = NsplitClu;
 	this->Nattempts = Nattempts;
 	this->NdistAttempts = NdistAttempts;
+	this->NvalidationPartitions = NvalidationPartitions;
 	this->inFileName = inFileName;
 	this->outFileName = outFileName;
 
@@ -689,6 +692,7 @@ void Partitions::splitCluster(Clusters &clusters){
 
 }
 
+
 void Partitions::readPartitionsFile(){
 
   cout << "Reading partitions file " << flush;  
@@ -709,7 +713,14 @@ void Partitions::readPartitionsFile(){
   while(read >> buf)
       Npartitions++;
 
-  cout << "with " << Npartitions << " partitions " << flush;
+  if(Npartitions - NvalidationPartitions > 0){
+  	Npartitions -= NvalidationPartitions;
+  }
+  else{
+  	cout << "--Not enough partitions for validation. Will not validate.--" << endl;
+  }
+
+  cout << "with " << Npartitions << " partitions to cluster and " << NvalidationPartitions << " partitions for validation " << flush;
 
   // Count remaining nodes
   while(getline(ifs,line))
@@ -722,10 +733,15 @@ void Partitions::readPartitionsFile(){
   partitions = vector<Partition>(Npartitions);
   for(int i=0;i<Npartitions;i++)
   	partitions[i] = Partition(i,Nnodes);
+  validationPartitions = vector<Partition>(NvalidationPartitions);
+  for(int i=0;i<NvalidationPartitions;i++)
+  	validationPartitions[i] = Partition(i,Nnodes);
 
   // Restart from beginning of file
   vector<map<string,int> > partitionsAssignmentId(Npartitions);
   vector<int> partitionsAssignmentIds(Npartitions,0);
+  vector<map<string,int> > validationPartitionsAssignmentId(NvalidationPartitions);
+  vector<int> validationPartitionsAssignmentIds(NvalidationPartitions,0);
   string delim = ":";
   ifs.clear();
   ifs.seekg(0, ios::beg);
@@ -744,17 +760,33 @@ void Partitions::readPartitionsFile(){
       	string assignmentKey = "";
       	for(vector<string>::iterator it = assignments.begin(); it != assignments.end(); it++){
       		assignmentKey += (*it) + ":";
-      		map<string,int>::iterator assignmentId_it = partitionsAssignmentId[i].find(assignmentKey);
-      		int assignmentId = partitionsAssignmentIds[i];
-      		if(assignmentId_it != partitionsAssignmentId[i].end()){
-						assignmentId = assignmentId_it->second;
-      		}
-      		else{
-      			partitionsAssignmentId[i][assignmentKey] = partitionsAssignmentIds[i];
-      			partitionsAssignmentIds[i]++;
-      		}
-      		partitions[i].assignments[nodeNr].push_back(assignmentId); 
-        	partitions[i].clusterSizes[assignmentId]++;
+      		if(i<Npartitions){
+      			map<string,int>::iterator assignmentId_it = partitionsAssignmentId[i].find(assignmentKey);
+      			int assignmentId = partitionsAssignmentIds[i];
+      			if(assignmentId_it != partitionsAssignmentId[i].end()){
+							assignmentId = assignmentId_it->second;
+      			}
+      			else{
+      				partitionsAssignmentId[i][assignmentKey] = partitionsAssignmentIds[i];
+      				partitionsAssignmentIds[i]++;
+      			}
+      			partitions[i].assignments[nodeNr].push_back(assignmentId); 
+        		partitions[i].clusterSizes[assignmentId]++;
+        	}
+        	else{
+        		int validate_i = i - Npartitions;
+      			map<string,int>::iterator assignmentId_it = validationPartitionsAssignmentId[validate_i].find(assignmentKey);
+      			int assignmentId = validationPartitionsAssignmentIds[validate_i];
+      			if(assignmentId_it != validationPartitionsAssignmentId[validate_i].end()){
+							assignmentId = assignmentId_it->second;
+      			}
+      			else{
+      				validationPartitionsAssignmentId[validate_i][assignmentKey] = validationPartitionsAssignmentIds[validate_i];
+      				validationPartitionsAssignmentIds[validate_i]++;
+      			}
+      			validationPartitions[validate_i].assignments[nodeNr].push_back(assignmentId); 
+        		validationPartitions[validate_i].clusterSizes[assignmentId]++;
+        	}
       	}
 
 
@@ -769,9 +801,40 @@ void Partitions::readPartitionsFile(){
 
 }
 
+void Partitions::validatePartitions(){
+
+	cout << "-->Number of validation partitions that fits in a cluster..." << flush;
+
+	int Nvalidated = 0;
+	// int NClusters = bestClusters.sortedClusters.size();
+	#pragma omp parallel for
+	for(int i=0;i<NvalidationPartitions;i++){
+		int j = 0;
+		for(SortedClusters::iterator cluster_it = bestClusters.sortedClusters.begin(); cluster_it != bestClusters.sortedClusters.end(); cluster_it++){
+			double maxValidationDist = 0.0;
+			vector<Partition *> &cluster = cluster_it->second;
+			for(vector<Partition *>::iterator partition_it = cluster.begin(); partition_it != cluster.end(); partition_it++)
+				maxValidationDist = max(maxValidationDist,wpJaccardDist(*partition_it,&validationPartitions[i]));
+			if(maxValidationDist < distThreshold){
+				// cout << "-->Validation partition " << i+1 << " fits in cluster " << j+1 << "." << endl;
+				#pragma omp atomic
+				Nvalidated++;
+				break;
+			}
+			j++;
+		}
+
+		// if(j == NClusters){
+		// 	cout << "-->Validation partition " << i+1 << " does not fit in any cluster." << endl;
+		// }
+	}
+	cout << Nvalidated << endl;
+
+}
+
 void Partitions::printClusters(){
 
-	cout << "Writing clustering results..." << flush;
+	cout << "-->Writing clustering results..." << flush;
 
   my_ofstream ofs;
 	ofs.open(outFileName.c_str());
