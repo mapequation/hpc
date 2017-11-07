@@ -16,3 +16,7 @@ test.txt
 *.plist
 
 *.rtf
+
+validation_output_multilevel_partitions.txt
+
+validation_test.txt

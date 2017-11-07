@@ -154,6 +154,7 @@ private:
 	
 	vector<Partition> partitions;
 	vector<Partition> validationPartitions;
+	vector<bool> validatedPartitions;
 	int Nskiplines = 0;
 	int Nnodes = 0;
 	int Npartitions = 0;
@@ -170,7 +171,7 @@ private:
 	double splitDistThreshold = 0.2;
 	vector<mt19937> mtRands;
 	ifstream ifs;
-  string line;
+  	string line;
 	Clusters bestClusters;
 
 	unsigned int NfinalClu;
@@ -806,6 +807,7 @@ void Partitions::validatePartitions(){
 	cout << "-->Number of validation partitions that fits in a cluster..." << flush;
 
 	int Nvalidated = 0;
+	validatedPartitions = vector<bool>(validationPartitions.size(),false);
 	// int NClusters = bestClusters.sortedClusters.size();
 	#pragma omp parallel for
 	for(int i=0;i<NvalidationPartitions;i++){
@@ -819,6 +821,7 @@ void Partitions::validatePartitions(){
 				// cout << "-->Validation partition " << i+1 << " fits in cluster " << j+1 << "." << endl;
 				#pragma omp atomic
 				Nvalidated++;
+				validatedPartitions[i] = true;
 				break;
 			}
 			j++;
@@ -836,7 +839,7 @@ void Partitions::printClusters(){
 
 	cout << "-->Writing clustering results..." << flush;
 
-  my_ofstream ofs;
+  	my_ofstream ofs;
 	ofs.open(outFileName.c_str());
 	int i = 1;
 	ofs << "# Clustered " << Npartitions << " partitions into " << bestClusters.sortedClusters.size() << " clusters with maximum internal distance " << bestClusters.sortedClusters.begin()->first << ", average maximum internal distance " << bestClusters.sumMaxDist/bestClusters.sortedClusters.size() << ", and maximum cluster size " << bestClusters.maxClusterSize << endl;
@@ -859,6 +862,16 @@ void Partitions::printClusters(){
 	ofs.close();
 
 	cout << "done!" << endl;
+
+	if(validatedPartitions.size() > 0){
+
+		string validationOutFileName = "validation_" + outFileName;
+		ofs.open(validationOutFileName.c_str());
+		for(vector<bool>::iterator it = validatedPartitions.begin(); it != validatedPartitions.end(); it++)
+			ofs << *it << endl;
+		ofs.close();
+
+	}
 
 }
 

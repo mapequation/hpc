@@ -150,7 +150,8 @@ int main(int argc,char *argv[]){
   Partitions partitions(inFileName,outFileName,Nskiplines,distThreshold,splitDistThreshold,NsplitClu,Nattempts,NdistAttempts,NvalidationPartitions,seed);
 
   partitions.clusterPartitions();
+  if(NvalidationPartitions > 0)
+    partitions.validatePartitions();
   partitions.printClusters();
-  partitions.validatePartitions();
 
 }

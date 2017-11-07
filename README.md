@@ -26,9 +26,10 @@ divisive distance threshold: The max distance between two partitions in any clus
 number of clusters in each division (>= 2): The number of clusters the cluster with highest divergence will be divided into. Default is 2.  
 number of attempts: The number of attempts to optimize the cluster assignments. Default is 1.  
 --skiplines N: Skip N lines in input_partitions.txt before reading data.  
---validate N: The number of partitions N at the end that will be used for validation. The first partitions will be used to find clusters. Default is 0 validtion partitions.   
+--validate N: The number of partitions N at the end that will be used for validation. The first partitions will be used to find clusters. Default is 0 validation partitions. 
 input_partitions.txt: Each column corresponds to a partition and each row corresponds to a node id.  
-output_clustering.txt: clusterID partitionID.  
+output_clustering.txt: clusterID partitionID.
+validation_output_clustering.txt: bool (1 if validation partition fits in a cluster and 0 if not, printed in the order of the validation partitions)  
 -h: This help.  
 
 Example:
