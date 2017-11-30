@@ -809,23 +809,47 @@ void Partitions::validatePartitions(){
 	int Nvalidated = 0;
 	validatedPartitions = vector<bool>(validationPartitions.size(),false);
 	// int NClusters = bestClusters.sortedClusters.size();
+
 	#pragma omp parallel for
 	for(int i=0;i<NvalidationPartitions;i++){
-		int j = 0;
+		
+		// Order clusters to search the closest ones first
+		multimap< double, vector<Partition *>* > validationSortedClusters;
 		for(SortedClusters::iterator cluster_it = bestClusters.sortedClusters.begin(); cluster_it != bestClusters.sortedClusters.end(); cluster_it++){
-			double maxValidationDist = 0.0;
 			vector<Partition *> &cluster = cluster_it->second;
+			Partition *randPartition_ptr = cluster[randInt(0,cluster.size()-1)];
+			double randPartitionDist = wpJaccardDist(randPartition_ptr,&validationPartitions[i]);
+			validationSortedClusters.insert(make_pair(randPartitionDist,&cluster));
+		}
+
+		for(multimap< double, vector<Partition *>* >::iterator cluster_it = validationSortedClusters.begin(); cluster_it != validationSortedClusters.end(); cluster_it++){
+			double maxValidationDist = 0.0;
+			vector<Partition *> &cluster = *cluster_it->second;
 			for(vector<Partition *>::iterator partition_it = cluster.begin(); partition_it != cluster.end(); partition_it++)
 				maxValidationDist = max(maxValidationDist,wpJaccardDist(*partition_it,&validationPartitions[i]));
 			if(maxValidationDist < distThreshold){
-				// cout << "-->Validation partition " << i+1 << " fits in cluster " << j+1 << "." << endl;
 				#pragma omp atomic
 				Nvalidated++;
 				validatedPartitions[i] = true;
 				break;
 			}
-			j++;
+			
 		}
+
+		// Search in standard ordering 
+		// for(SortedClusters::iterator cluster_it = bestClusters.sortedClusters.begin(); cluster_it != bestClusters.sortedClusters.end(); cluster_it++){
+		// 	double maxValidationDist = 0.0;
+		// 	vector<Partition *> &cluster = cluster_it->second;
+		// 	for(vector<Partition *>::iterator partition_it = cluster.begin(); partition_it != cluster.end(); partition_it++)
+		// 		maxValidationDist = max(maxValidationDist,wpJaccardDist(*partition_it,&validationPartitions[i]));
+		// 	if(maxValidationDist < distThreshold){
+		// 		#pragma omp atomic
+		// 		Nvalidated++;
+		// 		validatedPartitions[i] = true;
+		// 		break;
+		// 	}
+			
+		// }
 
 		// if(j == NClusters){
 		// 	cout << "-->Validation partition " << i+1 << " does not fit in any cluster." << endl;
