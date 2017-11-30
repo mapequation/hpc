@@ -27,6 +27,7 @@ number of clusters in each division (>= 2): The number of clusters the cluster w
 number of attempts: The number of attempts to optimize the cluster assignments. Default is 1.  
 --skiplines N: Skip N lines in input_partitions.txt before reading data.  
 --validate N: The number of partitions N at the end that will be used for validation. The first partitions will be used to find clusters. Default is 0 validation partitions. 
+--k-fold-crossvalidate k: Perform k-fold cross-validation of all partitions. The training partitions will be used to find clusters and the other ones for validation. Default is 0 folds for no cross-validation.  
 input_partitions.txt: Each column corresponds to a partition and each row corresponds to a node id.  
 output_clustering.txt: clusterID partitionID.
 validation_output_clustering.txt: bool (1 if validation partition fits in a cluster and 0 if not, printed in the order of the validation partitions)  

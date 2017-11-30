@@ -153,12 +153,9 @@ private:
 	// double updateCenters(unordered_map<int,pair<double,vector<LocalStateNode> > > &newMedoids);
 	
 	vector<Partition> partitions;
-	vector<Partition> validationPartitions;
-	vector<bool> validatedPartitions;
+	// vector<bool> validatedPartitions;
 	int Nskiplines = 0;
-	int Nnodes = 0;
-	int Npartitions = 0;
-	int NvalidationPartitions = 0;
+	int crossvalidate_k = 0;
 
 	int randInt(int from, int to);
 	double randDouble(double to);
@@ -179,14 +176,21 @@ private:
 	// unordered_map<pair<int,int>,double,pairhash> cachedWJSdiv;
 
 public:
-	Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int NvalidationPartitions,int seed); 
+	Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int NvalidationPartitions,int crossvalidate_k,int seed); 
 	void readPartitionsFile();
-	void clusterPartitions();
+	void clusterPartitions(int fold);
 	void printClusters();
-	void validatePartitions();
+	void validatePartitions(int fold);
+	int Nnodes = 0;
+	int Npartitions = 0;
+	int NtrainingPartitions = 0;
+	int NvalidationPartitions = 0;
+
+	int NtotValidated = 0;
+	int NtotTested = 0;
 };
 
-Partitions::Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int NvalidationPartitions,int seed){
+Partitions::Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int NvalidationPartitions,int crossvalidate_k,int seed){
 	this->Nskiplines = Nskiplines;
 	this->distThreshold = distThreshold;
 	this->splitDistThreshold = splitDistThreshold;
@@ -195,15 +199,14 @@ Partitions::Partitions(string inFileName,string outFileName,int Nskiplines,doubl
 	this->Nattempts = Nattempts;
 	this->NdistAttempts = NdistAttempts;
 	this->NvalidationPartitions = NvalidationPartitions;
+	this->crossvalidate_k = crossvalidate_k;
 	this->inFileName = inFileName;
 	this->outFileName = outFileName;
 
 	int threads = max(1, omp_get_max_threads());
-
-	for(int i = 0; i < threads; i++){
-    mtRands.push_back(mt19937(seed+1));
-  }
-
+	for(int i = 0; i < threads; i++)
+  	  mtRands.push_back(mt19937(seed+1));
+  
 	// Open state network for building state node to physical node mapping
 	ifs.open(inFileName.c_str());
 	if(!ifs){
@@ -213,8 +216,8 @@ Partitions::Partitions(string inFileName,string outFileName,int Nskiplines,doubl
 	readPartitionsFile();
 	ifs.close();
 
-	// for(int i=0;i<Npartitions;i++){
-	// 	for(int j=i+1;j<Npartitions;j++){
+	// for(int i=0;i<NtrainingPartitions;i++){
+	// 	for(int j=i+1;j<NtrainingPartitions;j++){
 	// 		cout << i << " " << j << " " << wpJaccardDist(i,j) << endl;
 	// 	}
 	// }
@@ -389,7 +392,7 @@ double Partitions::calcMaxDist(vector<Partition *> &partition1Ptrs,vector<Partit
 	#ifdef _OPENMP
 	// Initiate locks to keep track of best solutions
 	omp_lock_t lock;
-  omp_init_lock(&lock);
+  	omp_init_lock(&lock);
 	#endif
 
 	int NClusterPartitions1 = partition1Ptrs.size();
@@ -437,28 +440,29 @@ double Partitions::calcMaxDist(vector<Partition *> &partition1Ptrs,vector<Partit
 	return maxDist;
 }
 
-void Partitions::clusterPartitions(){
+void Partitions::clusterPartitions(int fold){
 
 	cout << "Clustering partitions:" << endl;
 
 	// To keep track of best solutions
-	int bestNClusters = Npartitions;
-	double bestSumMaxDist = bignum*Npartitions;
+	int bestNClusters = NtrainingPartitions;
+	double bestSumMaxDist = bignum*NtrainingPartitions;
 
-	vector<Partition*> partitionPtrs = vector<Partition*>(Npartitions);
-	for(int i=0;i<Npartitions;i++)
-		partitionPtrs[i] = &partitions[i];
+	vector<Partition*> partitionPtrs = vector<Partition*>(NtrainingPartitions);
+	for(int i=0;i<NtrainingPartitions;i++){
+		partitionPtrs[i] = &partitions[i + (i >= (Npartitions-(fold+1)*NvalidationPartitions) ? NvalidationPartitions : 0) ];
+	}
 
 	double maxDist = calcMaxDist(partitionPtrs);
 
   	for(int attempt=0;attempt<Nattempts;attempt++){
   		
 		Clusters clusters;
-		clusters.maxClusterSize = Npartitions;
+		clusters.maxClusterSize = NtrainingPartitions;
 		clusters.sumMaxDist = maxDist;
 		clusters.sortedClusters.insert(make_pair(maxDist,partitionPtrs));
 		
-		cout << "-->Attempt " << attempt+1 << "/" << Nattempts << ": First dividing " << Npartitions << " partitions..." << flush;
+		cout << "-->Attempt " << attempt+1 << "/" << Nattempts << ": First dividing " << NtrainingPartitions << " partitions..." << flush;
 		splitCluster(clusters);
 		cout << "into " << clusters.sortedClusters.size() << " clusters and then merging..." << flush;
 		mergeClusters(clusters);
@@ -714,14 +718,19 @@ void Partitions::readPartitionsFile(){
   while(read >> buf)
       Npartitions++;
 
+  if(crossvalidate_k > 0)
+  	NvalidationPartitions = Npartitions/crossvalidate_k;
+
   if(Npartitions - NvalidationPartitions > 0){
-  	Npartitions -= NvalidationPartitions;
+  	NtrainingPartitions = Npartitions - NvalidationPartitions;
   }
   else{
   	cout << "--Not enough partitions for validation. Will not validate.--" << endl;
   }
 
-  cout << "with " << Npartitions << " partitions to cluster and " << NvalidationPartitions << " partitions for validation " << flush;
+  cout << "with " << Npartitions << " partitions with " << NtrainingPartitions << " partitions for clustering and " << NvalidationPartitions << " partitions for validation " << flush;
+  if(crossvalidate_k > 0)
+  	cout << " in each of the " << crossvalidate_k << " folds " << flush;
 
   // Count remaining nodes
   while(getline(ifs,line))
@@ -734,15 +743,10 @@ void Partitions::readPartitionsFile(){
   partitions = vector<Partition>(Npartitions);
   for(int i=0;i<Npartitions;i++)
   	partitions[i] = Partition(i,Nnodes);
-  validationPartitions = vector<Partition>(NvalidationPartitions);
-  for(int i=0;i<NvalidationPartitions;i++)
-  	validationPartitions[i] = Partition(i,Nnodes);
 
   // Restart from beginning of file
   vector<map<string,int> > partitionsAssignmentId(Npartitions);
   vector<int> partitionsAssignmentIds(Npartitions,0);
-  vector<map<string,int> > validationPartitionsAssignmentId(NvalidationPartitions);
-  vector<int> validationPartitionsAssignmentIds(NvalidationPartitions,0);
   string delim = ":";
   ifs.clear();
   ifs.seekg(0, ios::beg);
@@ -761,37 +765,18 @@ void Partitions::readPartitionsFile(){
       	string assignmentKey = "";
       	for(vector<string>::iterator it = assignments.begin(); it != assignments.end(); it++){
       		assignmentKey += (*it) + ":";
-      		if(i<Npartitions){
-      			map<string,int>::iterator assignmentId_it = partitionsAssignmentId[i].find(assignmentKey);
-      			int assignmentId = partitionsAssignmentIds[i];
-      			if(assignmentId_it != partitionsAssignmentId[i].end()){
-							assignmentId = assignmentId_it->second;
-      			}
-      			else{
-      				partitionsAssignmentId[i][assignmentKey] = partitionsAssignmentIds[i];
-      				partitionsAssignmentIds[i]++;
-      			}
-      			partitions[i].assignments[nodeNr].push_back(assignmentId); 
-        		partitions[i].clusterSizes[assignmentId]++;
-        	}
-        	else{
-        		int validate_i = i - Npartitions;
-      			map<string,int>::iterator assignmentId_it = validationPartitionsAssignmentId[validate_i].find(assignmentKey);
-      			int assignmentId = validationPartitionsAssignmentIds[validate_i];
-      			if(assignmentId_it != validationPartitionsAssignmentId[validate_i].end()){
-							assignmentId = assignmentId_it->second;
-      			}
-      			else{
-      				validationPartitionsAssignmentId[validate_i][assignmentKey] = validationPartitionsAssignmentIds[validate_i];
-      				validationPartitionsAssignmentIds[validate_i]++;
-      			}
-      			validationPartitions[validate_i].assignments[nodeNr].push_back(assignmentId); 
-        		validationPartitions[validate_i].clusterSizes[assignmentId]++;
-        	}
+      		map<string,int>::iterator assignmentId_it = partitionsAssignmentId[i].find(assignmentKey);
+      		int assignmentId = partitionsAssignmentIds[i];
+      		if(assignmentId_it != partitionsAssignmentId[i].end()){
+				assignmentId = assignmentId_it->second;
+      		}
+      		else{
+      			partitionsAssignmentId[i][assignmentKey] = partitionsAssignmentIds[i];
+      			partitionsAssignmentIds[i]++;
+      		}
+      		partitions[i].assignments[nodeNr].push_back(assignmentId); 
+        	partitions[i].clusterSizes[assignmentId]++;
       	}
-
-
-        
         i++;
       }
       nodeNr++;
@@ -802,13 +787,19 @@ void Partitions::readPartitionsFile(){
 
 }
 
-void Partitions::validatePartitions(){
 
-	cout << "-->Number of validation partitions that fits in a cluster..." << flush;
+void Partitions::validatePartitions(int fold){
+
+	cout << "-->Number of validation partitions out of " << NvalidationPartitions << " that fits in a cluster..." << flush;
 
 	int Nvalidated = 0;
-	validatedPartitions = vector<bool>(validationPartitions.size(),false);
+	// validatedPartitions = vector<bool>(validationPartitions.size(),false);
 	// int NClusters = bestClusters.sortedClusters.size();
+
+	vector<Partition*> validationPartitionPtrs = vector<Partition*>(NvalidationPartitions);
+	for(int i=0;i<NvalidationPartitions;i++){
+		validationPartitionPtrs[i] = &partitions[Npartitions-(fold+1)*NvalidationPartitions+i];
+	}
 
 	#pragma omp parallel for
 	for(int i=0;i<NvalidationPartitions;i++){
@@ -818,7 +809,7 @@ void Partitions::validatePartitions(){
 		for(SortedClusters::iterator cluster_it = bestClusters.sortedClusters.begin(); cluster_it != bestClusters.sortedClusters.end(); cluster_it++){
 			vector<Partition *> &cluster = cluster_it->second;
 			Partition *randPartition_ptr = cluster[randInt(0,cluster.size()-1)];
-			double randPartitionDist = wpJaccardDist(randPartition_ptr,&validationPartitions[i]);
+			double randPartitionDist = wpJaccardDist(randPartition_ptr,validationPartitionPtrs[i]);
 			validationSortedClusters.insert(make_pair(randPartitionDist,&cluster));
 		}
 
@@ -826,11 +817,11 @@ void Partitions::validatePartitions(){
 			double maxValidationDist = 0.0;
 			vector<Partition *> &cluster = *cluster_it->second;
 			for(vector<Partition *>::iterator partition_it = cluster.begin(); partition_it != cluster.end(); partition_it++)
-				maxValidationDist = max(maxValidationDist,wpJaccardDist(*partition_it,&validationPartitions[i]));
+				maxValidationDist = max(maxValidationDist,wpJaccardDist(*partition_it,validationPartitionPtrs[i]));
 			if(maxValidationDist < distThreshold){
 				#pragma omp atomic
 				Nvalidated++;
-				validatedPartitions[i] = true;
+				// validatedPartitions[i] = true;
 				break;
 			}
 			
@@ -857,6 +848,9 @@ void Partitions::validatePartitions(){
 	}
 	cout << Nvalidated << endl;
 
+	NtotValidated += Nvalidated;
+	NtotTested += NvalidationPartitions;
+
 }
 
 void Partitions::printClusters(){
@@ -866,7 +860,7 @@ void Partitions::printClusters(){
   	my_ofstream ofs;
 	ofs.open(outFileName.c_str());
 	int i = 1;
-	ofs << "# Clustered " << Npartitions << " partitions into " << bestClusters.sortedClusters.size() << " clusters with maximum internal distance " << bestClusters.sortedClusters.begin()->first << ", average maximum internal distance " << bestClusters.sumMaxDist/bestClusters.sortedClusters.size() << ", and maximum cluster size " << bestClusters.maxClusterSize << endl;
+	ofs << "# Clustered " << NtrainingPartitions << " partitions into " << bestClusters.sortedClusters.size() << " clusters with maximum internal distance " << bestClusters.sortedClusters.begin()->first << ", average maximum internal distance " << bestClusters.sumMaxDist/bestClusters.sortedClusters.size() << ", and maximum cluster size " << bestClusters.maxClusterSize << endl;
 	ofs << "# ClusterId PartitionId" << endl;
 	for(SortedClusters::iterator cluster_it = bestClusters.sortedClusters.begin(); cluster_it != bestClusters.sortedClusters.end(); cluster_it++){
 		vector<Partition *> &cluster = cluster_it->second;
@@ -887,15 +881,15 @@ void Partitions::printClusters(){
 
 	cout << "done!" << endl;
 
-	if(validatedPartitions.size() > 0){
+	// if(validatedPartitions.size() > 0){
 
-		string validationOutFileName = "validation_" + outFileName;
-		ofs.open(validationOutFileName.c_str());
-		for(vector<bool>::iterator it = validatedPartitions.begin(); it != validatedPartitions.end(); it++)
-			ofs << *it << endl;
-		ofs.close();
+	// 	string validationOutFileName = "validation_" + outFileName;
+	// 	ofs.open(validationOutFileName.c_str());
+	// 	for(vector<bool>::iterator it = validatedPartitions.begin(); it != validatedPartitions.end(); it++)
+	// 		ofs << *it << endl;
+	// 	ofs.close();
 
-	}
+	// }
 
 }
 
