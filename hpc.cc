@@ -20,7 +20,7 @@ int main(int argc,char *argv[]){
   cout << endl;
 
   // Parse command input
-  const string CALL_SYNTAX = "Call: ./hpc [-h] [-s <seed>] [-N <number of attempts>] [-n <max distance attempts>] [-t <distance threshold>] [-dt <divisive distance threshold>] [-d <number of clusters in each division (>= 2)>] [--skiplines N] [--validate N] [--k-fold-crossvalidate k] input_partitions.txt output_clustering_txt\n";
+  const string CALL_SYNTAX = "Call: ./hpc [-h] [-s <seed>] [-N <number of attempts>] [-n <max distance attempts>] [-t <distance threshold>] [-dt <divisive distance threshold>] [-d <number of clusters xin each division (>= 2)>] [--skiplines N] [--validate N] [--k-fold-crossvalidate k] [--subsample <fraction f> <samples N>] input_partitions.txt output_clustering_txt\n";
   if( argc == 1 ){
     cout << CALL_SYNTAX;
     exit(-1);
@@ -39,7 +39,9 @@ int main(int argc,char *argv[]){
   int Nattempts = 1;
   int NdistAttempts = 1;
   int NvalidationPartitions = 0;
-  int crossvalidate_k = 0;
+  int crossvalidateK = 0;
+  double subsampleF = 0.0;
+  int subsampleN = 0;
   while(argNr < argc){
     if(to_string(argv[argNr]) == "-h"){
       cout << CALL_SYNTAX;
@@ -53,6 +55,7 @@ int main(int argc,char *argv[]){
       cout << "--skiplines N: Skip N lines in input_partitions.txt before reading data." << endl;
       cout << "--validate N: The number of partitions N at the end that will be used for validation. The first partitions will be used to find clusters. Default is 0 validation partitions." << endl; 
       cout << "--k-fold-crossvalidate k: Perform k-fold cross-validation of all partitions. The training partitions will be used to find clusters and the other ones for validation. Default is 0 folds for no cross-validation." << endl;
+      cout << "--subsample <fraction f> <samples N>: After clustering all partitions, N times a fraction f of them will be chosen randomly. Reports the average fraction of subsampled partitions that belong to clusters no remaining partition belongs to. Default is no subsampling." << endl; 
       cout << "input_partitions.txt: Each column corresponds to a partition and each row corresponds to a node id." << endl;  
       cout << "output_clustering.txt: clusterID partitionID" << endl;  
       cout << "-h: This help" << endl;
@@ -96,9 +99,16 @@ int main(int argc,char *argv[]){
     }
     else if(to_string(argv[argNr]) == "--k-fold-crossvalidate"){
       argNr++;
-      crossvalidate_k = atoi(argv[argNr]);
+      crossvalidateK = atoi(argv[argNr]);
       argNr++;
-    }  
+    }
+    else if(to_string(argv[argNr]) == "--subsample"){
+      argNr++;
+      subsampleF = atof(argv[argNr]);
+      argNr++;
+      subsampleN = atoi(argv[argNr]);
+      argNr++;
+    }    
     else if(to_string(argv[argNr]) == "-d"){
       argNr++;
       NsplitClu = atoi(argv[argNr]);
@@ -149,24 +159,42 @@ int main(int argc,char *argv[]){
   cout << "-->Will read partitions from file: " << inFileName << endl;
   if(Nskiplines > 0)
     cout << "-->skipping " << Nskiplines << " lines" << endl;
-  if(crossvalidate_k > 0)
-    cout << "-->performing " << crossvalidate_k << "-fold cross-valiation." << endl;
-  else if(NvalidationPartitions > 0)
+  if(crossvalidateK > 0){
+    cout << "-->performing " << crossvalidateK << "-fold cross-valiation." << endl;
+    NvalidationPartitions = 0;
+    crossvalidateK = 0;
+    subsampleF = 0.0;
+    subsampleN = 0;
+  }
+  else if(subsampleF > 0.0){
+    cout << "-->performing subsampling of " << subsampleF << " partitions " << subsampleN << " times." << endl;
+    NvalidationPartitions = 0;
+    crossvalidateK = 0;
+  }
+  else if(NvalidationPartitions > 0){
     cout << "-->using the last " << NvalidationPartitions << " partitions for validation." << endl;
+    crossvalidateK = 0;
+    subsampleF = 0.0;
+    subsampleN = 0;
+  }
   cout << "-->Will write clusters to file: " << outFileName << endl;
   cout << "-->Will use number of threads: " <<  omp_get_max_threads() << endl;
 
-  Partitions partitions(inFileName,outFileName,Nskiplines,distThreshold,splitDistThreshold,NsplitClu,Nattempts,NdistAttempts,NvalidationPartitions,crossvalidate_k,seed);
+  Partitions partitions(inFileName,outFileName,Nskiplines,distThreshold,splitDistThreshold,NsplitClu,Nattempts,NdistAttempts,NvalidationPartitions,crossvalidateK,seed);
 
-  if(crossvalidate_k == 0){
+  if(crossvalidateK == 0){
     partitions.clusterPartitions(0);
-    if(NvalidationPartitions > 0)
+    if(subsampleF > 0.0){
+      partitions.subsample(subsampleF,subsampleN);
+    }
+    else if(NvalidationPartitions > 0){
       partitions.validatePartitions(0);
+    }
     partitions.printClusters();
   }
   else{
-    for(int fold = 0;fold<crossvalidate_k;fold++){
-      cout << endl << "Fold " << fold+1 << "/" << crossvalidate_k << endl;
+    for(int fold = 0;fold<crossvalidateK;fold++){
+      cout << endl << "Fold " << fold+1 << "/" << crossvalidateK << endl;
       partitions.clusterPartitions(fold);
       partitions.validatePartitions(fold);
       cout << "Fraction of validation partitions that fits in a cluster after " << fold+1 << " folds: " << 1.0*partitions.NtotValidated/partitions.NtotTested << endl;

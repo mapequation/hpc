@@ -155,7 +155,9 @@ private:
 	vector<Partition> partitions;
 	// vector<bool> validatedPartitions;
 	int Nskiplines = 0;
-	int crossvalidate_k = 0;
+	int crossvalidateK = 0;
+
+	int Nthreads = 1;
 
 	int randInt(int from, int to);
 	double randDouble(double to);
@@ -176,11 +178,12 @@ private:
 	// unordered_map<pair<int,int>,double,pairhash> cachedWJSdiv;
 
 public:
-	Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int NvalidationPartitions,int crossvalidate_k,int seed); 
+	Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int NvalidationPartitions,int crossvalidateK,int seed); 
 	void readPartitionsFile();
 	void clusterPartitions(int fold);
 	void printClusters();
 	void validatePartitions(int fold);
+	void subsample(double subsampleF, int subsampleN);
 	int Nnodes = 0;
 	int Npartitions = 0;
 	int NtrainingPartitions = 0;
@@ -190,7 +193,7 @@ public:
 	int NtotTested = 0;
 };
 
-Partitions::Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int NvalidationPartitions,int crossvalidate_k,int seed){
+Partitions::Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int NvalidationPartitions,int crossvalidateK,int seed){
 	this->Nskiplines = Nskiplines;
 	this->distThreshold = distThreshold;
 	this->splitDistThreshold = splitDistThreshold;
@@ -199,12 +202,12 @@ Partitions::Partitions(string inFileName,string outFileName,int Nskiplines,doubl
 	this->Nattempts = Nattempts;
 	this->NdistAttempts = NdistAttempts;
 	this->NvalidationPartitions = NvalidationPartitions;
-	this->crossvalidate_k = crossvalidate_k;
+	this->crossvalidateK = crossvalidateK;
 	this->inFileName = inFileName;
 	this->outFileName = outFileName;
 
-	int threads = max(1, omp_get_max_threads());
-	for(int i = 0; i < threads; i++)
+	Nthreads = max(1, omp_get_max_threads());
+	for(int i = 0; i < Nthreads; i++)
   	  mtRands.push_back(mt19937(seed+1));
   
 	// Open state network for building state node to physical node mapping
@@ -718,8 +721,8 @@ void Partitions::readPartitionsFile(){
   while(read >> buf)
       Npartitions++;
 
-  if(crossvalidate_k > 0)
-  	NvalidationPartitions = Npartitions/crossvalidate_k;
+  if(crossvalidateK > 0)
+  	NvalidationPartitions = Npartitions/crossvalidateK;
 
   if(Npartitions - NvalidationPartitions > 0){
   	NtrainingPartitions = Npartitions - NvalidationPartitions;
@@ -729,8 +732,8 @@ void Partitions::readPartitionsFile(){
   }
 
   cout << "with " << Npartitions << " partitions with " << NtrainingPartitions << " partitions for clustering and " << NvalidationPartitions << " partitions for validation " << flush;
-  if(crossvalidate_k > 0)
-  	cout << " in each of the " << crossvalidate_k << " folds " << flush;
+  if(crossvalidateK > 0)
+  	cout << " in each of the " << crossvalidateK << " folds " << flush;
 
   // Count remaining nodes
   while(getline(ifs,line))
@@ -853,12 +856,65 @@ void Partitions::validatePartitions(int fold){
 
 }
 
+void Partitions::subsample(double subsampleF, int subsampleN){
+
+	int sampleSize = static_cast<int>(subsampleF*Npartitions + 0.5);
+	vector<int> partitionClusterAssignments(Npartitions);
+	cout << "-->Samplings clustering results..." << flush;
+	// Create partition cluster assignment vector
+	int i = 1;
+	for(SortedClusters::iterator cluster_it = bestClusters.sortedClusters.begin(); cluster_it != bestClusters.sortedClusters.end(); cluster_it++){
+		vector<Partition *> &cluster = cluster_it->second;
+		for(vector<Partition *>::iterator partition_it = cluster.begin(); partition_it != cluster.end(); partition_it++)
+			partitionClusterAssignments[(*partition_it)->partitionId] = i;
+		i++;
+	}
+
+	vector<vector<int> > NinSeenClusterVec(Nthreads);
+
+	#pragma omp parallel for
+	for(int i=0;i<subsampleN;i++){
+		vector<int> partitionSample(Npartitions);
+		for(int j=0;j<Npartitions;j++)
+			partitionSample[j] = j;
+
+		shuffle(partitionSample.begin(),partitionSample.end(),mtRands[omp_get_thread_num()]);
+		set<int> NsampledClusters;
+		for(int j=sampleSize;j<Npartitions;j++){
+			NsampledClusters.insert(partitionClusterAssignments[partitionSample[j]]);
+		}
+		int NinSeenCluster = 0;
+		for(int j=0;j<sampleSize;j++){
+			if(NsampledClusters.find(partitionClusterAssignments[partitionSample[j]]) != NsampledClusters.end())
+				NinSeenCluster++;
+		}
+		NinSeenClusterVec[omp_get_thread_num()].push_back(NinSeenCluster);
+	}	
+
+	int totNinSeenCluster = 0;
+	string subsampleOutFileName = outFileName + "_subsample";
+	my_ofstream ofs;
+	ofs.open(subsampleOutFileName.c_str());
+	for(vector<vector<int> >::iterator thread_it = NinSeenClusterVec.begin(); thread_it != NinSeenClusterVec.end(); thread_it++){
+		for(vector<int>::iterator it = thread_it->begin(); it != thread_it->end(); it++){
+			ofs << *it << endl;
+			totNinSeenCluster += *it;
+
+		}
+	}
+	ofs.close();
+	cout << "finding on average a fraction of " << 1.0*totNinSeenCluster/(subsampleN*sampleSize) << " sampled partitions in clusters with non-sampled partitions. Results written to " << subsampleOutFileName << endl;
+
+
+}
+
 void Partitions::printClusters(){
 
 	cout << "-->Writing clustering results..." << flush;
 
   	my_ofstream ofs;
 	ofs.open(outFileName.c_str());
+
 	int i = 1;
 	ofs << "# Clustered " << NtrainingPartitions << " partitions into " << bestClusters.sortedClusters.size() << " clusters with maximum internal distance " << bestClusters.sortedClusters.begin()->first << ", average maximum internal distance " << bestClusters.sumMaxDist/bestClusters.sortedClusters.size() << ", and maximum cluster size " << bestClusters.maxClusterSize << endl;
 	ofs << "# ClusterId PartitionId" << endl;
