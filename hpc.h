@@ -275,11 +275,11 @@ double Partitions::wpJaccardDist(Partition *partition1, Partition *partition2){
 
 double Partitions::calcMaxDist(vector<Partition *> &partitionPtrs){
 
-	#ifdef _OPENMP
-	// Initiate locks to keep track of best solutions
-	omp_lock_t lock;
-  	omp_init_lock(&lock);
-	#endif
+	// #ifdef _OPENMP
+	// // Initiate locks to keep track of best solutions
+	// omp_lock_t lock;
+ //  	omp_init_lock(&lock);
+	// #endif
 
 	int NClusterPartitions = partitionPtrs.size();
 	double maxDist = 0.0;
@@ -296,21 +296,21 @@ double Partitions::calcMaxDist(vector<Partition *> &partitionPtrs){
 			randPartitionId = maxDistIdWithRandPartitionId;
 			maxDistIdWithRandPartitionId = randPartitionId;
 			maxDistWithRandPartitionId = 0.0;
-			#pragma omp parallel for
+			// #pragma omp parallel for
 			for(int i=0;i<NClusterPartitions;i++){
 				if(i != randPartitionId){
 					double dist = wpJaccardDist(partitionPtrs[randPartitionId],partitionPtrs[i]);
-					#ifdef _OPENMP
-					omp_set_lock(&lock);
-					#endif					
+					// #ifdef _OPENMP
+					// omp_set_lock(&lock);
+					// #endif					
 					if(dist > maxDistWithRandPartitionId){									
 						maxDistWithRandPartitionId = dist; // Max in round
 						maxDistIdWithRandPartitionId = i;
 						maxDist = max(maxDist,dist); // Max overall
 					}
-					#ifdef _OPENMP
-					omp_unset_lock(&lock);
-					#endif
+					// #ifdef _OPENMP
+					// omp_unset_lock(&lock);
+					// #endif
 				}
 			}
 			step++;
@@ -322,11 +322,11 @@ double Partitions::calcMaxDist(vector<Partition *> &partitionPtrs){
 
 double Partitions::calcMaxDist(vector<Partition *> &partition1Ptrs,vector<Partition *> &partition2Ptrs){
 
-	#ifdef _OPENMP
-	// Initiate locks to keep track of best solutions
-	omp_lock_t lock;
-  	omp_init_lock(&lock);
-	#endif
+	// #ifdef _OPENMP
+	// // Initiate locks to keep track of best solutions
+	// omp_lock_t lock;
+ //  	omp_init_lock(&lock);
+	// #endif
 
 	int NClusterPartitions1 = partition1Ptrs.size();
 	int NClusterPartitions2 = partition2Ptrs.size();
@@ -347,22 +347,22 @@ double Partitions::calcMaxDist(vector<Partition *> &partition1Ptrs,vector<Partit
 			maxDistIdWithRandPartitionId = randPartitionId;
 			maxDistWithRandPartitionId = 0.0;
 			Partition *partitionPtr1 = (randPartitionId < NClusterPartitions1) ? partition1Ptrs[randPartitionId] : partition2Ptrs[randPartitionId-NClusterPartitions1];
-			#pragma omp parallel for
+			// #pragma omp parallel for
 			for(int i=0;i<NClusterPartitions;i++){
 				if(i != randPartitionId){
 					Partition *partitionPtr2 = (i < NClusterPartitions1) ? partition1Ptrs[i] : partition2Ptrs[i-NClusterPartitions1];
 					double dist = wpJaccardDist(partitionPtr1,partitionPtr2);
-					#ifdef _OPENMP
-					omp_set_lock(&lock);
-					#endif					
+					// #ifdef _OPENMP
+					// omp_set_lock(&lock);
+					// #endif					
 					if(dist > maxDistWithRandPartitionId){									
 						maxDistWithRandPartitionId = dist; // Max in round
 						maxDistIdWithRandPartitionId = i;
 						maxDist = max(maxDist,dist); // Max overall
 					}
-					#ifdef _OPENMP
-					omp_unset_lock(&lock);
-					#endif					
+					// #ifdef _OPENMP
+					// omp_unset_lock(&lock);
+					// #endif					
 				}
 			}
 			step++;
@@ -374,6 +374,12 @@ double Partitions::calcMaxDist(vector<Partition *> &partition1Ptrs,vector<Partit
 }
 
 void Partitions::clusterPartitions(int fold){
+
+	#ifdef _OPENMP
+	// Initiate locks to keep track of best solutions
+	omp_lock_t lock;
+	omp_init_lock(&lock);
+	#endif
 
 	cout << "Clustering partitions:" << endl;
 
@@ -388,32 +394,40 @@ void Partitions::clusterPartitions(int fold){
 
 	double maxDist = calcMaxDist(partitionPtrs);
 
+	#pragma omp parallel for
   	for(int attempt=0;attempt<Nattempts;attempt++){
   		
 		Clusters clusters;
 		clusters.maxClusterSize = NtrainingPartitions;
 		clusters.sumMaxDist = maxDist;
 		clusters.sortedClusters.insert(make_pair(maxDist,partitionPtrs));
+		stringstream output;
 		
-		cout << "-->Attempt " << attempt+1 << "/" << Nattempts << ": First dividing " << NtrainingPartitions << " partitions..." << flush;
+		output << "-->Attempt " << attempt+1 << "/" << Nattempts << ": First dividing " << NtrainingPartitions << " partitions...";
 		// for(int i=0;i<10;i++){
 		splitCluster(clusters);
-		cout << "into " << clusters.sortedClusters.size() << " clusters and then merging..." << flush;
+		output << "into " << clusters.sortedClusters.size() << " clusters and then merging...";
 		mergeClusters(clusters);
 		double attemptNClusters = clusters.sortedClusters.size();
 		double attemptSumMaxDist = clusters.sumMaxDist;
-		cout << "into " << attemptNClusters << " clusters with maximum internal distance " << clusters.sortedClusters.begin()->first << ", average maximum internal distance " << attemptSumMaxDist/attemptNClusters << ", and maximum cluster size " << clusters.maxClusterSize << ".";
+		output << "into " << attemptNClusters << " clusters with maximum internal distance " << clusters.sortedClusters.begin()->first << ", average maximum internal distance " << attemptSumMaxDist/attemptNClusters << ", and maximum cluster size " << clusters.maxClusterSize << ".";
 
 		// Update best solution
-
+		#ifdef _OPENMP
+		omp_set_lock(&lock);
+		#endif	
 		if( (attemptNClusters < bestNClusters) || ((attemptNClusters == bestNClusters) && (attemptSumMaxDist < bestSumMaxDist)) ){
 			bestNClusters = attemptNClusters;
 			bestSumMaxDist = attemptSumMaxDist;
 			bestClusters = move(clusters);
 			// bestClusters = clusters;
-			cout << " New best solution!";
+			output << " New best solution!";
 		}
-		cout << endl;
+		#ifdef _OPENMP
+		omp_unset_lock(&lock);
+		#endif			
+		output << endl;
+		cout << output.str();
 		// }
 			
 	} // end of for loop
