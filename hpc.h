@@ -169,15 +169,13 @@ private:
 
 	unsigned int NfinalClu;
 	unsigned int NsplitClu;
-	vector<int> validationVec;
 
 public:
 	Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int NvalidationPartitions,int crossvalidateK,int seed); 
 	void readPartitionsFile();
 	void clusterPartitions(int fold);
 	void printClusters();
-	void printValidation();
-	void validatePartitions(int fold);
+	void validatePartitions(int fold,string filesuffix);
 	void subsample(double subsampleF, int subsampleN);
 
 	int Nnodes = 0;
@@ -739,18 +737,16 @@ void Partitions::readPartitionsFile(){
 }
 
 
-void Partitions::validatePartitions(int fold){
-
-	cout << "-->Number of validation partitions out of " << NvalidationPartitions << " that fits in a cluster..." << flush;
+void Partitions::validatePartitions(int fold,string filesuffix){
 
 	int Nvalidated = 0;
-	// validatedPartitions = vector<bool>(validationPartitions.size(),false);
-	// int NClusters = bestClusters.sortedClusters.size();
 
 	vector<Partition*> validationPartitionPtrs = vector<Partition*>(NvalidationPartitions);
 	for(int i=0;i<NvalidationPartitions;i++){
 		validationPartitionPtrs[i] = &partitions[Npartitions-(fold+1)*NvalidationPartitions+i];
 	}
+	cout << "-->Number of validation partitions out of " << NvalidationPartitions << " (" << validationPartitionPtrs[0]->partitionId+1 << "-" << validationPartitionPtrs[NvalidationPartitions-1]->partitionId+1 << ") that fits in a cluster..." << flush;
+	vector<bool> validatedPartitions(NvalidationPartitions,false);
 
 	#pragma omp parallel for
 	for(int i=0;i<NvalidationPartitions;i++){
@@ -772,7 +768,7 @@ void Partitions::validatePartitions(int fold){
 			if(maxValidationDist < distThreshold){
 				#pragma omp atomic
 				Nvalidated++;
-				// validatedPartitions[i] = true;
+				validatedPartitions[i] = true;
 				break;
 			}
 			
@@ -797,10 +793,23 @@ void Partitions::validatePartitions(int fold){
 		// 	cout << "-->Validation partition " << i+1 << " does not fit in any cluster." << endl;
 		// }
 	}
-	cout << Nvalidated << endl;
-	validationVec.push_back(Nvalidated);
+	cout << Nvalidated << ". " << flush;	
 	NtotValidated += Nvalidated;
 	NtotTested += NvalidationPartitions;
+
+	string validationOutFileName = outFileName;
+	size_t period_pos = validationOutFileName.find_last_of(".");
+	if(period_pos ==  string::npos)
+		validationOutFileName += "_validation" + filesuffix;
+	else
+		validationOutFileName.insert(period_pos,"_validation" + filesuffix);
+	cout << "Writing validation results to " << validationOutFileName << endl;
+	my_ofstream ofs;
+	ofs.open(validationOutFileName.c_str());
+	for(int i=0;i<NvalidationPartitions;i++){
+		ofs << validationPartitionPtrs[i]->partitionId+1 << " " << validatedPartitions[i] << endl;
+	}
+	ofs.close();
 
 }
 
@@ -903,24 +912,6 @@ void Partitions::printClusters(){
 	// 	ofs.close();
 
 	// }
-
-}
-
-void Partitions::printValidation(){
-
-	string validationOutFileName = outFileName;
-	size_t period_pos = validationOutFileName.find_last_of(".");
-	if(period_pos ==  string::npos)
-		validationOutFileName += "_validation";
-	else
-		validationOutFileName.insert(period_pos,"_validation");
-	cout << "-->Writing validation results to " << validationOutFileName << endl;
-	my_ofstream ofs;
-	ofs.open(validationOutFileName.c_str());
-	for(vector<int>::iterator it = validationVec.begin(); it != validationVec.end(); it++){
-		ofs << *it << endl;
-	}
-	ofs.close();
 
 }
 

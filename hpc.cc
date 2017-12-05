@@ -187,8 +187,7 @@ int main(int argc,char *argv[]){
       partitions.subsample(subsampleF,subsampleN);
     }
     else if(NvalidationPartitions > 0){
-      partitions.validatePartitions(0);
-      partitions.printValidation();
+      partitions.validatePartitions(0,"");
     }
     partitions.printClusters();
   }
@@ -196,10 +195,10 @@ int main(int argc,char *argv[]){
     for(int fold = 0;fold<crossvalidateK;fold++){
       cout << endl << "Fold " << fold+1 << "/" << crossvalidateK << endl;
       partitions.clusterPartitions(fold);
-      partitions.validatePartitions(fold);
+      partitions.validatePartitions(fold,"_" + to_string(fold+1));
       cout << "-->Fraction of validation partitions that fits in a cluster after " << fold+1 << " folds: " << 1.0*partitions.NtotValidated/partitions.NtotTested << endl;
     }
-    partitions.printValidation();
+
   }
 
 }
