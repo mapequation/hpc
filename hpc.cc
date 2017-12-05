@@ -162,7 +162,6 @@ int main(int argc,char *argv[]){
   if(crossvalidateK > 0){
     cout << "-->performing " << crossvalidateK << "-fold cross-valiation." << endl;
     NvalidationPartitions = 0;
-    crossvalidateK = 0;
     subsampleF = 0.0;
     subsampleN = 0;
   }
@@ -189,6 +188,7 @@ int main(int argc,char *argv[]){
     }
     else if(NvalidationPartitions > 0){
       partitions.validatePartitions(0);
+      partitions.printValidation();
     }
     partitions.printClusters();
   }
@@ -197,8 +197,9 @@ int main(int argc,char *argv[]){
       cout << endl << "Fold " << fold+1 << "/" << crossvalidateK << endl;
       partitions.clusterPartitions(fold);
       partitions.validatePartitions(fold);
-      cout << "Fraction of validation partitions that fits in a cluster after " << fold+1 << " folds: " << 1.0*partitions.NtotValidated/partitions.NtotTested << endl;
+      cout << "-->Fraction of validation partitions that fits in a cluster after " << fold+1 << " folds: " << 1.0*partitions.NtotValidated/partitions.NtotTested << endl;
     }
+    partitions.printValidation();
   }
 
 }
