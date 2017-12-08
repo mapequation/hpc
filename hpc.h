@@ -159,6 +159,7 @@ private:
 	string inFileName;
 	string outFileName;
 	int Nattempts = 1;
+	int NmaxPartitions = numeric_limits<int>::max();
 	int NdistAttempts = 1;
 	double distThreshold = 0.2;
 	double splitDistThreshold = 0.2;
@@ -171,7 +172,7 @@ private:
 	unsigned int NsplitClu;
 
 public:
-	Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int NvalidationPartitions,int crossvalidateK,int seed); 
+	Partitions(string inFileName,string outFileName,int NmaxPartitions,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int NvalidationPartitions,int crossvalidateK,int seed); 
 	void readPartitionsFile();
 	void clusterPartitions(int fold);
 	void printClusters();
@@ -187,7 +188,8 @@ public:
 	int NtotTested = 0;
 };
 
-Partitions::Partitions(string inFileName,string outFileName,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int NvalidationPartitions,int crossvalidateK,int seed){
+Partitions::Partitions(string inFileName,string outFileName,int NmaxPartitions,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int NvalidationPartitions,int crossvalidateK,int seed){
+	this->NmaxPartitions = NmaxPartitions;
 	this->Nskiplines = Nskiplines;
 	this->distThreshold = distThreshold;
 	this->splitDistThreshold = splitDistThreshold;
@@ -664,7 +666,7 @@ void Partitions::readPartitionsFile(){
   Nnodes++; // First line corresponds to first node
 
   istringstream read(line);
-  while(read >> buf)
+  while(read >> buf && Npartitions < NmaxPartitions)
       Npartitions++;
 
   if(crossvalidateK > 0)
@@ -679,7 +681,7 @@ void Partitions::readPartitionsFile(){
 
   cout << "with " << Npartitions << " partitions with " << NtrainingPartitions << " partitions for clustering and " << NvalidationPartitions << " partitions for validation " << flush;
   if(crossvalidateK > 0)
-  	cout << " in each of the " << crossvalidateK << " folds " << flush;
+  	cout << "in each of the " << crossvalidateK << " folds " << flush;
 
   // Count remaining nodes
   while(getline(ifs,line))
@@ -708,7 +710,7 @@ void Partitions::readPartitionsFile(){
     if(lineNr > Nskiplines){
       istringstream read(line);
       int i = 0;
-      while(read >> buf){
+      while(read >> buf && i < NmaxPartitions){
       	string assignment = buf.c_str();
       	vector<string> assignments = tokenize(assignment,delim);
       	string assignmentKey = "";
@@ -746,7 +748,7 @@ void Partitions::validatePartitions(int fold,string filesuffix){
 		validationPartitionPtrs[i] = &partitions[Npartitions-(fold+1)*NvalidationPartitions+i];
 	}
 	cout << "-->Number of validation partitions out of " << NvalidationPartitions << " (" << validationPartitionPtrs[0]->partitionId+1 << "-" << validationPartitionPtrs[NvalidationPartitions-1]->partitionId+1 << ") that fits in a cluster..." << flush;
-	vector<bool> validatedPartitions(NvalidationPartitions,false);
+	vector<int> validatedPartitions(NvalidationPartitions,0);
 
 	#pragma omp parallel for
 	for(int i=0;i<NvalidationPartitions;i++){
@@ -768,7 +770,7 @@ void Partitions::validatePartitions(int fold,string filesuffix){
 			if(maxValidationDist < distThreshold){
 				#pragma omp atomic
 				Nvalidated++;
-				validatedPartitions[i] = true;
+				validatedPartitions[i] += 1;
 				break;
 			}
 			
@@ -902,16 +904,6 @@ void Partitions::printClusters(){
 	ofs.close();
 
 	cout << "done!" << endl;
-
-	// if(validatedPartitions.size() > 0){
-
-	// 	string validationOutFileName = "validation_" + outFileName;
-	// 	ofs.open(validationOutFileName.c_str());
-	// 	for(vector<bool>::iterator it = validatedPartitions.begin(); it != validatedPartitions.end(); it++)
-	// 		ofs << *it << endl;
-	// 	ofs.close();
-
-	// }
 
 }
 

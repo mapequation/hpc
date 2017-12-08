@@ -12,7 +12,7 @@ unsigned stou(char *s){
   // Call: trade <seed> <Ntries>
 int main(int argc,char *argv[]){
 
-  cout << "Version: June 28, 2017." << endl;
+  cout << "Version: December 8, 2017." << endl;
   cout << "Command: ";
   cout << argv[0];
   for(int i=1;i<argc; i++)
@@ -20,7 +20,7 @@ int main(int argc,char *argv[]){
   cout << endl;
 
   // Parse command input
-  const string CALL_SYNTAX = "Call: ./hpc [-h] [-s <seed>] [-N <number of attempts>] [-n <max distance attempts>] [-t <distance threshold>] [-dt <divisive distance threshold>] [-d <number of clusters xin each division (>= 2)>] [--skiplines N] [--validate N] [--k-fold-crossvalidate k] [--subsample <fraction f> <samples N>] input_partitions.txt output_clustering_txt\n";
+  const string CALL_SYNTAX = "Call: ./hpc [-h] [-s <seed>] [-P <max number of partitions>] [-N <number of attempts>] [-n <max distance attempts>] [-t <distance threshold>] [-dt <divisive distance threshold>] [-d <number of clusters xin each division (>= 2)>] [--skiplines N] [--validate N] [--k-fold-crossvalidate k] [--subsample <fraction f> <samples N>] input_partitions.txt output_clustering_txt\n";
   if( argc == 1 ){
     cout << CALL_SYNTAX;
     exit(-1);
@@ -37,6 +37,7 @@ int main(int argc,char *argv[]){
   double splitDistThreshold = distThreshold;
   bool readSplitDistThreshold = false;
   int Nattempts = 1;
+  int NmaxPartitions = numeric_limits<int>::max();
   int NdistAttempts = 1;
   int NvalidationPartitions = 0;
   int crossvalidateK = 0;
@@ -45,7 +46,8 @@ int main(int argc,char *argv[]){
   while(argNr < argc){
     if(to_string(argv[argNr]) == "-h"){
       cout << CALL_SYNTAX;
-      cout << "seed: Any positive integer." << endl;  
+      cout << "seed: Any positive integer." << endl; 
+      cout << "max number of partitions: Will only include max number of partitions in the analysis and ignore the rest. Default is to unclude all partitions." << endl;
       cout << "number of attempts: The number of clustering attempts. The best will be printed." << endl; 
       cout << "max distance attempts: The number of iterations to estimate the maximum distance in a cluster. Default is 1." << endl;  
       cout << "distance threshold: The max distance between two partitions in any cluster. Default is 0.2." << endl;
@@ -69,6 +71,11 @@ int main(int argc,char *argv[]){
     else if(to_string(argv[argNr]) == "--skiplines"){
       argNr++;
       Nskiplines = atoi(argv[argNr]);
+      argNr++;
+    }
+    else if(to_string(argv[argNr]) == "-P"){
+      argNr++;
+      NmaxPartitions = atoi(argv[argNr]);
       argNr++;
     }
     else if(to_string(argv[argNr]) == "-N"){
@@ -153,6 +160,10 @@ int main(int argc,char *argv[]){
   cout << "-->Using seed: " << seed << endl;
   cout << "-->Will cluster partitions such that no cluster contains two partitions with distance larger than: " << distThreshold << endl;
   cout << "-->Will first divide clusters until no cluster contains two partitions with distance larger than: " << splitDistThreshold << endl;
+  if(NmaxPartitions == numeric_limits<int>::max())
+    cout << "-->Will include all partitions. " << endl;
+  else
+    cout << "-->Will include at most number of partitions: " << NmaxPartitions << endl;
   cout << "-->Will iteratively divide worst cluster into number of clusters: " << NsplitClu << endl;
   cout << "-->Will make number of attempts: " << Nattempts << endl;
   cout << "-->Will estimate max distance in cluster with number of attempts: " << NdistAttempts << endl;
@@ -179,7 +190,7 @@ int main(int argc,char *argv[]){
   cout << "-->Will write clusters to file: " << outFileName << endl;
   cout << "-->Will use number of threads: " <<  omp_get_max_threads() << endl;
 
-  Partitions partitions(inFileName,outFileName,Nskiplines,distThreshold,splitDistThreshold,NsplitClu,Nattempts,NdistAttempts,NvalidationPartitions,crossvalidateK,seed);
+  Partitions partitions(inFileName,outFileName,NmaxPartitions,Nskiplines,distThreshold,splitDistThreshold,NsplitClu,Nattempts,NdistAttempts,NvalidationPartitions,crossvalidateK,seed);
 
   if(crossvalidateK == 0){
     partitions.clusterPartitions(0);
