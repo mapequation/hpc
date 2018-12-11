@@ -122,6 +122,7 @@ Partition::Partition(int partitionid, int Nnodes){
 }
 
 typedef multimap< double, vector<Partition *>, greater<double> > SortedClusters;
+typedef vector< vector<Partition *> > FastClusters;
 
 class Clusters{
 public:
@@ -130,6 +131,7 @@ public:
 	unsigned int maxClusterSize = 0;
 	double sumMaxDist = 0.0;
 	SortedClusters sortedClusters;
+	FastClusters fastClusters;
 };
 
 Clusters::Clusters(){
@@ -158,6 +160,7 @@ private:
 
 	string inFileName;
 	string outFileName;
+	bool fast;
 	int Nattempts = 1;
 	int NmaxPartitions = numeric_limits<int>::max();
 	int NdistAttempts = 1;
@@ -168,11 +171,10 @@ private:
   	string line;
 	Clusters bestClusters;
 
-	unsigned int NfinalClu;
 	unsigned int NsplitClu;
 
 public:
-	Partitions(string inFileName,string outFileName,int NmaxPartitions,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int NvalidationPartitions,int crossvalidateK,int seed); 
+	Partitions(string inFileName,string outFileName,bool fast,int NmaxPartitions,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int NvalidationPartitions,int crossvalidateK,int seed); 
 	void readPartitionsFile();
 	void clusterPartitions(int fold);
 	void printClusters();
@@ -188,12 +190,12 @@ public:
 	int NtotTested = 0;
 };
 
-Partitions::Partitions(string inFileName,string outFileName,int NmaxPartitions,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int NvalidationPartitions,int crossvalidateK,int seed){
+Partitions::Partitions(string inFileName,string outFileName,bool fast,int NmaxPartitions,int Nskiplines,double distThreshold,double splitDistThreshold,unsigned int NsplitClu,int Nattempts,int NdistAttempts,int NvalidationPartitions,int crossvalidateK,int seed){
+	this->fast = fast;
 	this->NmaxPartitions = NmaxPartitions;
 	this->Nskiplines = Nskiplines;
 	this->distThreshold = distThreshold;
 	this->splitDistThreshold = splitDistThreshold;
-	this->NfinalClu = NfinalClu;
 	this->NsplitClu = NsplitClu;
 	this->Nattempts = Nattempts;
 	this->NdistAttempts = NdistAttempts;
@@ -386,54 +388,85 @@ void Partitions::clusterPartitions(int fold){
 
 	cout << "Clustering partitions:" << endl;
 
-	// To keep track of best solutions
-	int bestNClusters = NtrainingPartitions;
-	double bestSumMaxDist = bignum*NtrainingPartitions;
+	if(fast){
 
-	vector<Partition*> partitionPtrs = vector<Partition*>(NtrainingPartitions);
-	for(int i=0;i<NtrainingPartitions;i++){
-		partitionPtrs[i] = &partitions[i + (i >= (Npartitions-(fold+1)*NvalidationPartitions) ? NvalidationPartitions : 0) ];
-	}
-
-	double maxDist = calcMaxDist(partitionPtrs);
-
-	#pragma omp parallel for
-  	for(int attempt=0;attempt<Nattempts;attempt++){
-  		
-		Clusters clusters;
-		clusters.maxClusterSize = NtrainingPartitions;
-		clusters.sumMaxDist = maxDist;
-		clusters.sortedClusters.insert(make_pair(maxDist,partitionPtrs));
-		stringstream output;
-		
-		output << "-->Attempt " << attempt+1 << "/" << Nattempts << ": First dividing " << NtrainingPartitions << " partitions...";
-		// for(int i=0;i<10;i++){
-		splitCluster(clusters);
-		output << "into " << clusters.sortedClusters.size() << " clusters and then merging...";
-		mergeClusters(clusters);
-		double attemptNClusters = clusters.sortedClusters.size();
-		double attemptSumMaxDist = clusters.sumMaxDist;
-		output << "into " << attemptNClusters << " clusters with maximum internal distance " << clusters.sortedClusters.begin()->first << ", average maximum internal distance " << attemptSumMaxDist/attemptNClusters << ", and maximum cluster size " << clusters.maxClusterSize << ".";
-
-		// Update best solution
-		#ifdef _OPENMP
-		omp_set_lock(&lock);
-		#endif	
-		if( (attemptNClusters < bestNClusters) || ((attemptNClusters == bestNClusters) && (attemptSumMaxDist < bestSumMaxDist)) ){
-			bestNClusters = attemptNClusters;
-			bestSumMaxDist = attemptSumMaxDist;
-			bestClusters = move(clusters);
-			// bestClusters = clusters;
-			output << " New best solution!";
+		vector<Partition*> partitionPtrs = vector<Partition*>(NtrainingPartitions);
+		for(int i=0;i<NtrainingPartitions;i++){
+			partitionPtrs[i] = &partitions[i + (i >= (Npartitions-(fold+1)*NvalidationPartitions) ? NvalidationPartitions : 0) ];
 		}
-		#ifdef _OPENMP
-		omp_unset_lock(&lock);
-		#endif			
-		output << endl;
-		cout << output.str();
-		// }
+
+
+		bestClusters.fastClusters.push_back({partitionPtrs[0]});
+		int NfastClusters = 1;
+		// vector<Partition *> clusteredPartitionPtrs{partitionPtrs[0]};
+		// fastClusters.push_back(clusteredPartitionPtrs);
+		for(int i=1;i<NtrainingPartitions;i++){
+			bool fitsInFastCluster = false;
+			for(int j=0;j<NfastClusters;j++){
+				if(wpJaccardDist(partitionPtrs[i],bestClusters.fastClusters[j][0]) < distThreshold){
+					fitsInFastCluster = true;
+					bestClusters.fastClusters[j].push_back(partitionPtrs[i]);
+					break;
+				}
+			}
+			if(!fitsInFastCluster){
+				bestClusters.fastClusters.push_back({partitionPtrs[i]});
+				NfastClusters++;
+			}
+		}
+
+	}
+	else{
+
+		// To keep track of best solutions
+		int bestNClusters = NtrainingPartitions;
+		double bestSumMaxDist = bignum*NtrainingPartitions;
+	
+		vector<Partition*> partitionPtrs = vector<Partition*>(NtrainingPartitions);
+		for(int i=0;i<NtrainingPartitions;i++){
+			partitionPtrs[i] = &partitions[i + (i >= (Npartitions-(fold+1)*NvalidationPartitions) ? NvalidationPartitions : 0) ];
+		}
+	
+		double maxDist = calcMaxDist(partitionPtrs);
+	
+		#pragma omp parallel for
+	  	for(int attempt=0;attempt<Nattempts;attempt++){
+	  		
+			Clusters clusters;
+			clusters.maxClusterSize = NtrainingPartitions;
+			clusters.sumMaxDist = maxDist;
+			clusters.sortedClusters.insert(make_pair(maxDist,partitionPtrs));
+			stringstream output;
 			
-	} // end of for loop
+			output << "-->Attempt " << attempt+1 << "/" << Nattempts << ": First dividing " << NtrainingPartitions << " partitions...";
+			// for(int i=0;i<10;i++){
+			splitCluster(clusters);
+			output << "into " << clusters.sortedClusters.size() << " clusters and then merging...";
+			mergeClusters(clusters);
+			double attemptNClusters = clusters.sortedClusters.size();
+			double attemptSumMaxDist = clusters.sumMaxDist;
+			output << "into " << attemptNClusters << " clusters with maximum internal distance " << clusters.sortedClusters.begin()->first << ", average maximum internal distance " << attemptSumMaxDist/attemptNClusters << ", and maximum cluster size " << clusters.maxClusterSize << ".";
+	
+			// Update best solution
+			#ifdef _OPENMP
+			omp_set_lock(&lock);
+			#endif	
+			if( (attemptNClusters < bestNClusters) || ((attemptNClusters == bestNClusters) && (attemptSumMaxDist < bestSumMaxDist)) ){
+				bestNClusters = attemptNClusters;
+				bestSumMaxDist = attemptSumMaxDist;
+				bestClusters = move(clusters);
+				// bestClusters = clusters;
+				output << " New best solution!";
+			}
+			#ifdef _OPENMP
+			omp_unset_lock(&lock);
+			#endif			
+			output << endl;
+			cout << output.str();
+			// }
+				
+		} // end of for loop
+	}
 
 }
 
@@ -883,22 +916,41 @@ void Partitions::printClusters(){
   	my_ofstream ofs;
 	ofs.open(outFileName.c_str());
 
-	int i = 1;
-	ofs << "# Clustered " << NtrainingPartitions << " partitions into " << bestClusters.sortedClusters.size() << " clusters with maximum internal distance " << bestClusters.sortedClusters.begin()->first << ", average maximum internal distance " << bestClusters.sumMaxDist/bestClusters.sortedClusters.size() << ", and maximum cluster size " << bestClusters.maxClusterSize << endl;
-	ofs << "# ClusterId PartitionId" << endl;
-	for(SortedClusters::iterator cluster_it = bestClusters.sortedClusters.begin(); cluster_it != bestClusters.sortedClusters.end(); cluster_it++){
-		vector<Partition *> &cluster = cluster_it->second;
-		int clusterSize = cluster.size();
-		ofs << "# Cluster " << i << ": " << clusterSize << " nodes with max internal distance " << cluster_it->first << endl;
+	if(fast){
 
-		set<int> orderedPartitionIds;
-		for(vector<Partition *>::iterator partition_it = cluster.begin(); partition_it != cluster.end(); partition_it++)
-			orderedPartitionIds.insert((*partition_it)->partitionId+1);
 
-		for(set<int>::iterator id_it = orderedPartitionIds.begin(); id_it != orderedPartitionIds.end(); id_it++)
-			ofs << i << " " << (*id_it) << endl;
-		
-		i++;
+		int i = 1;
+		ofs << "# Clustered " << NtrainingPartitions << " partitions into " << bestClusters.fastClusters.size() << " clusters." << endl;
+		ofs << "# ClusterId PartitionId" << endl;
+		for(FastClusters::iterator cluster_it = bestClusters.fastClusters.begin(); cluster_it != bestClusters.fastClusters.end(); cluster_it++){
+
+			ofs << "# Cluster " << i << ": " << cluster_it->size() << " partitions." << endl;
+			for(vector<Partition *>::iterator partition_it = cluster_it->begin(); partition_it != cluster_it->end(); partition_it++)
+				ofs << i << " " << (*partition_it)->partitionId+1 << endl;
+			
+			i++;
+
+		}
+	}
+	else{
+
+		int i = 1;
+		ofs << "# Clustered " << NtrainingPartitions << " partitions into " << bestClusters.sortedClusters.size() << " clusters with maximum internal distance " << bestClusters.sortedClusters.begin()->first << ", average maximum internal distance " << bestClusters.sumMaxDist/bestClusters.sortedClusters.size() << ", and maximum cluster size " << bestClusters.maxClusterSize << endl;
+		ofs << "# ClusterId PartitionId" << endl;
+		for(SortedClusters::iterator cluster_it = bestClusters.sortedClusters.begin(); cluster_it != bestClusters.sortedClusters.end(); cluster_it++){
+			vector<Partition *> &cluster = cluster_it->second;
+			int clusterSize = cluster.size();
+			ofs << "# Cluster " << i << ": " << clusterSize << " nodes with max internal distance " << cluster_it->first << endl;
+	
+			set<int> orderedPartitionIds;
+			for(vector<Partition *>::iterator partition_it = cluster.begin(); partition_it != cluster.end(); partition_it++)
+				orderedPartitionIds.insert((*partition_it)->partitionId+1);
+	
+			for(set<int>::iterator id_it = orderedPartitionIds.begin(); id_it != orderedPartitionIds.end(); id_it++)
+				ofs << i << " " << (*id_it) << endl;
+			
+			i++;
+		}
 	}
 
 	ofs.close();

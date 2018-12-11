@@ -20,7 +20,7 @@ int main(int argc,char *argv[]){
   cout << endl;
 
   // Parse command input
-  const string CALL_SYNTAX = "Call: ./hpc [-h] [-s <seed>] [-P <max number of partitions>] [-N <number of attempts>] [-n <max distance attempts>] [-t <distance threshold>] [-dt <divisive distance threshold>] [-d <number of clusters xin each division (>= 2)>] [--skiplines N] [--validate N] [--k-fold-crossvalidate k] [--subsample <fraction f> <samples N>] input_partitions.txt output_clustering_txt\n";
+  const string CALL_SYNTAX = "Call: ./hpc [-h] [--fast] [-s <seed>] [-P <max number of partitions>] [-N <number of attempts>] [-n <max distance attempts>] [-t <distance threshold>] [-dt <divisive distance threshold>] [-d <number of clusters in each division (>= 2)>] [--skiplines N] [--validate N] [--k-fold-crossvalidate k] [--subsample <fraction f> <samples N>] input_partitions.txt output_clustering_txt\n";
   if( argc == 1 ){
     cout << CALL_SYNTAX;
     exit(-1);
@@ -36,6 +36,7 @@ int main(int argc,char *argv[]){
   double distThreshold = 0.2;
   double splitDistThreshold = distThreshold;
   bool readSplitDistThreshold = false;
+  bool fast = false;
   int Nattempts = 1;
   int NmaxPartitions = numeric_limits<int>::max();
   int NdistAttempts = 1;
@@ -46,6 +47,7 @@ int main(int argc,char *argv[]){
   while(argNr < argc){
     if(to_string(argv[argNr]) == "-h"){
       cout << CALL_SYNTAX;
+      cout << "--fast: Identifies partition cluster centers with partitions within distance threshold" << endl; 
       cout << "seed: Any positive integer." << endl; 
       cout << "max number of partitions: Will only include max number of partitions in the analysis and ignore the rest. Default is to unclude all partitions." << endl;
       cout << "number of attempts: The number of clustering attempts. The best will be printed." << endl; 
@@ -97,6 +99,10 @@ int main(int argc,char *argv[]){
     else if(to_string(argv[argNr]) == "-t"){
       argNr++;
       distThreshold = atof(argv[argNr]);
+      argNr++;
+    }
+    else if(to_string(argv[argNr]) == "--fast"){
+      fast = true;
       argNr++;
     }
     else if(to_string(argv[argNr]) == "--validate"){
@@ -158,15 +164,22 @@ int main(int argc,char *argv[]){
   
   cout << "Setup:" << endl;
   cout << "-->Using seed: " << seed << endl;
-  cout << "-->Will cluster partitions such that no cluster contains two partitions with distance larger than: " << distThreshold << endl;
-  cout << "-->Will first divide clusters until no cluster contains two partitions with distance larger than: " << splitDistThreshold << endl;
+  if(!fast){
+    cout << "-->Will cluster partitions such that no cluster contains two partitions with distance larger than: " << distThreshold << endl;
+    cout << "-->Will first divide clusters until no cluster contains two partitions with distance larger than: " << splitDistThreshold << endl;
+  }
+  else{
+    cout << "-->Will cluster partitions such that no partition is farther away from its center than: " << distThreshold << endl; 
+  }
   if(NmaxPartitions == numeric_limits<int>::max())
     cout << "-->Will include all partitions. " << endl;
   else
     cout << "-->Will include at most number of partitions: " << NmaxPartitions << endl;
-  cout << "-->Will iteratively divide worst cluster into number of clusters: " << NsplitClu << endl;
-  cout << "-->Will make number of attempts: " << Nattempts << endl;
-  cout << "-->Will estimate max distance in cluster with number of attempts: " << NdistAttempts << endl;
+  if(!fast){
+    cout << "-->Will iteratively divide worst cluster into number of clusters: " << NsplitClu << endl;
+    cout << "-->Will make number of attempts: " << Nattempts << endl;
+    cout << "-->Will estimate max distance in cluster with number of attempts: " << NdistAttempts << endl;
+  } 
   cout << "-->Will read partitions from file: " << inFileName << endl;
   if(Nskiplines > 0)
     cout << "-->skipping " << Nskiplines << " lines" << endl;
@@ -190,7 +203,7 @@ int main(int argc,char *argv[]){
   cout << "-->Will write clusters to file: " << outFileName << endl;
   cout << "-->Will use number of threads: " <<  omp_get_max_threads() << endl;
 
-  Partitions partitions(inFileName,outFileName,NmaxPartitions,Nskiplines,distThreshold,splitDistThreshold,NsplitClu,Nattempts,NdistAttempts,NvalidationPartitions,crossvalidateK,seed);
+  Partitions partitions(inFileName,outFileName,fast,NmaxPartitions,Nskiplines,distThreshold,splitDistThreshold,NsplitClu,Nattempts,NdistAttempts,NvalidationPartitions,crossvalidateK,seed);
 
   if(crossvalidateK == 0){
     partitions.clusterPartitions(0);
